@@ -9,7 +9,6 @@ import { spawn } from "node:child_process";
 const API = process.env.AGENTMEMORY_URL || "http://localhost:3111";
 const DEBUG = process.env.OPENCODE_AGENTMEMORY_DEBUG === "1";
 
-let alive = false;
 let starting = false;
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -18,9 +17,9 @@ async function health(): Promise<boolean> {
     const res = await fetch(`${API}/agentmemory/health`, {
       signal: AbortSignal.timeout(2000),
     });
-    return (alive = res.ok);
+    return res.ok;
   } catch {
-    return (alive = false);
+    return false;
   }
 }
 
@@ -43,7 +42,6 @@ function launch(): void {
   child.on("exit", (code) => {
     if (DEBUG) console.error(`[agentmemory-launcher] engine exited (code ${code}), will restart on next check`);
     starting = false;
-    alive = false;
   });
 
   child.unref();
