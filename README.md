@@ -1,6 +1,17 @@
+[![npm version](https://img.shields.io/npm/v/@agentmemory/launcher)](https://www.npmjs.com/package/@agentmemory/launcher)
+[![License](https://img.shields.io/npm/l/@agentmemory/launcher)](./LICENSE)
+[![Node.js](https://img.shields.io/node/v/@agentmemory/launcher)](https://nodejs.org/)
+[![CI](https://github.com/agentmemory/agentmemory-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/agentmemory/agentmemory-launcher/actions/workflows/ci.yml)
+
 # agentmemory-launcher
 
 > Auto-launcher plugin for [agentmemory](https://github.com/agentmemory/agentmemory) — starts the full backend on first OpenCode config load, with health-check supervision.
+
+## Requirements
+
+- **Node.js** ≥ 18.0.0
+- **OpenCode** with plugin support
+- **agentmemory** backend (auto-installed via `npx @agentmemory/agentmemory` if not present)
 
 ## What It Does
 
@@ -35,6 +46,18 @@ Or add to your OpenCode plugin config:
 | `AGENTMEMORY_URL` | `http://localhost:3111` | Backend API URL |
 | `OPENCODE_AGENTMEMORY_DEBUG` | unset | Set to `1` for debug logging |
 
+## API
+
+The plugin exports a single object conforming to the `@opencode-ai/plugin` interface:
+
+```typescript
+import type { Plugin } from "@opencode-ai/plugin";
+
+export const AgentmemoryLauncherPlugin: Plugin;
+```
+
+This plugin implements the `config` lifecycle hook, which is called each time OpenCode loads its configuration.
+
 ## Development
 
 ```bash
@@ -46,7 +69,16 @@ npm run typecheck
 
 # Build
 npm run build
+
+# Run tests
+npm test
 ```
+
+## Community
+
+- [Contributing Guide](./CONTRIBUTING.md)
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+- [Security Policy](./SECURITY.md)
 
 ## License
 
