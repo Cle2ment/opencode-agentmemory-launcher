@@ -1,11 +1,11 @@
-[![npm version](https://img.shields.io/npm/v/@agentmemory/launcher)](https://www.npmjs.com/package/@agentmemory/launcher)
-[![License](https://img.shields.io/npm/l/@agentmemory/launcher)](./LICENSE)
-[![Node.js](https://img.shields.io/node/v/@agentmemory/launcher)](https://nodejs.org/)
-[![CI](https://github.com/agentmemory/agentmemory-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/agentmemory/agentmemory-launcher/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/opencode-agentmemory-launcher)](https://www.npmjs.com/package/opencode-agentmemory-launcher)
+[![License](https://img.shields.io/npm/l/opencode-agentmemory-launcher)](./LICENSE)
+[![Node.js](https://img.shields.io/node/v/opencode-agentmemory-launcher)](https://nodejs.org/)
+[![CI](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml)
 
-# agentmemory-launcher
+# opencode-agentmemory-launcher
 
-> Auto-launcher plugin for [agentmemory](https://github.com/agentmemory/agentmemory) — starts the full backend on first OpenCode config load, with health-check supervision.
+> OpenCode plugin that auto-starts the [agentmemory](https://github.com/agentmemory/agentmemory) backend with health-check supervision.
 
 ## Requirements
 
@@ -15,22 +15,33 @@
 
 ## What It Does
 
-The `agentmemory-launcher` is an [OpenCode](https://github.com/oh-my-opencode/opencode) plugin that automatically starts the agentmemory backend (REST API + iii-engine) when OpenCode loads its configuration. It runs once per OpenCode process and health-checks the backend every 60 seconds, restarting it if the process dies.
+This plugin automatically starts the agentmemory backend (REST API + iii-engine) when OpenCode loads its configuration. It runs once per OpenCode process and health-checks the backend every 60 seconds, restarting it if the process dies.
 
 ## Installation
 
-```bash
-npm install @agentmemory/launcher
-```
+### From npm (recommended)
 
-Or add to your OpenCode plugin config:
+Add to your OpenCode config:
 
 ```jsonc
-// opencode.jsonc
+// opencode.json
 {
-  "plugins": ["@agentmemory/launcher"]
+  "plugin": ["opencode-agentmemory-launcher"]
 }
 ```
+
+OpenCode will automatically install the package at startup. See the [OpenCode Plugins documentation](https://opencode.ai/docs/en/plugins/) for more details.
+
+### From local file
+
+Place the plugin file in `.opencode/plugins/`:
+
+```
+.opencode/plugins/
+└── agentmemory-launcher.ts
+```
+
+Files in this directory are automatically loaded at startup.
 
 ## How It Works
 
@@ -84,4 +95,4 @@ npm test
 
 [GNU Affero General Public License v3.0](LICENSE)
 
-© agentmemory contributors
+© Cle2ment
