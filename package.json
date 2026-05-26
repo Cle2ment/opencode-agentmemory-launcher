@@ -7,7 +7,7 @@
   "homepage": "https://github.com/Cle2ment/opencode-agentmemory-launcher#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cle2ment/opencode-agentmemory-launcher"
+    "url": "git+https://github.com/Cle2ment/opencode-agentmemory-launcher.git"
   },
   "bugs": {
     "url": "https://github.com/Cle2ment/opencode-agentmemory-launcher/issues"
