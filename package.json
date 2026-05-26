@@ -1,0 +1,56 @@
+{
+  "name": "@agentmemory/launcher",
+  "version": "0.1.0",
+  "description": "Auto-launcher plugin for agentmemory — starts the full backend on first OpenCode config load, with health-check supervision",
+  "license": "AGPL-3.0-only",
+  "author": "agentmemory contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentmemory/agentmemory-launcher"
+  },
+  "bugs": {
+    "url": "https://github.com/agentmemory/agentmemory-launcher/issues"
+  },
+  "keywords": [
+    "agentmemory",
+    "opencode",
+    "plugin",
+    "launcher",
+    "memory",
+    "ai-agent"
+  ],
+  "type": "module",
+  "main": "./dist/agentmemory-launcher.js",
+  "types": "./dist/agentmemory-launcher.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/agentmemory-launcher.d.ts",
+      "import": "./dist/agentmemory-launcher.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo '// TODO: add linter'",
+    "format:check": "echo '// TODO: add formatter'"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": ">=0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
