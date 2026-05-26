@@ -17,5 +17,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Debug logging via `OPENCODE_AGENTMEMORY_DEBUG` env var
 - Configurable backend URL via `AGENTMEMORY_URL` env var
 
-[Unreleased]: https://github.com/agentmemory/agentmemory-launcher/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/agentmemory/agentmemory-launcher/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/releases/tag/v0.1.0

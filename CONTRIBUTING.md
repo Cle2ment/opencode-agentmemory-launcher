@@ -8,7 +8,7 @@ This project adheres to the [Contributor Covenant Code of Conduct](./CODE_OF_CON
 
 ## Reporting Bugs
 
-Found a bug? Please open an issue on GitHub using the [Bug Report template](https://github.com/agentmemory/agentmemory-launcher/issues/new?template=bug_report.md).
+Found a bug? Please open an issue on GitHub using the [Bug Report template](https://github.com/Cle2ment/opencode-agentmemory-launcher/issues/new?template=bug_report.md).
 
 Include:
 - Your environment (OS, Node.js version, plugin version)
