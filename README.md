@@ -43,6 +43,10 @@ Place the plugin file in `.opencode/plugins/`:
 
 Files in this directory are automatically loaded at startup.
 
+## Usage
+
+This launcher starts the agentmemory backend. To use agentmemory with OpenCode, also install the agentmemory plugin and refer to the [OpenCode agentmemory plugin usage guide](https://github.com/rohitg00/agentmemory/blob/main/plugin/opencode/README.md) for setup instructions, available tools, and configuration options.
+
 ## How It Works
 
 1. **On first config load**: The plugin starts a health-check interval (60s)
