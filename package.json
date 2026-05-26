@@ -4,6 +4,7 @@
   "description": "Auto-launcher plugin for agentmemory — starts the full backend on first OpenCode config load, with health-check supervision",
   "license": "AGPL-3.0-only",
   "author": "agentmemory contributors",
+  "homepage": "https://github.com/agentmemory/agentmemory-launcher#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/agentmemory/agentmemory-launcher"
@@ -37,8 +38,7 @@
     "build": "tsc",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
-    "lint": "echo '// TODO: add linter'",
-    "format:check": "echo '// TODO: add formatter'"
+    "test": "echo \"No tests yet\" && exit 0"
   },
   "dependencies": {
     "@opencode-ai/plugin": ">=0.1.0"
