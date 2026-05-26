@@ -1,16 +1,16 @@
 {
-  "name": "@agentmemory/launcher",
+  "name": "opencode-agentmemory-launcher",
   "version": "0.1.0",
-  "description": "Auto-launcher plugin for agentmemory — starts the full backend on first OpenCode config load, with health-check supervision",
+  "description": "OpenCode plugin that auto-starts the agentmemory backend with health-check supervision",
   "license": "AGPL-3.0-only",
-  "author": "agentmemory contributors",
-  "homepage": "https://github.com/agentmemory/agentmemory-launcher#readme",
+  "author": "Cle2ment",
+  "homepage": "https://github.com/Cle2ment/opencode-agentmemory-launcher#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/agentmemory/agentmemory-launcher"
+    "url": "https://github.com/Cle2ment/opencode-agentmemory-launcher"
   },
   "bugs": {
-    "url": "https://github.com/agentmemory/agentmemory-launcher/issues"
+    "url": "https://github.com/Cle2ment/opencode-agentmemory-launcher/issues"
   },
   "keywords": [
     "agentmemory",
