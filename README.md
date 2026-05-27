@@ -1,11 +1,11 @@
+# Agentmemory Launcher for OpenCode
+
+> OpenCode plugin that auto-starts the [agentmemory](https://github.com/agentmemory/agentmemory) backend with health-check supervision.
+
 [![npm version](https://img.shields.io/npm/v/opencode-agentmemory-launcher)](https://www.npmjs.com/package/opencode-agentmemory-launcher)
 [![License](https://img.shields.io/npm/l/opencode-agentmemory-launcher)](./LICENSE)
 [![Node.js](https://img.shields.io/node/v/opencode-agentmemory-launcher)](https://nodejs.org/)
 [![CI](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml)
-
-# Agentmemory Launcher for OpenCode
-
-> OpenCode plugin that auto-starts the [agentmemory](https://github.com/agentmemory/agentmemory) backend with health-check supervision.
 
 ## Requirements
 
