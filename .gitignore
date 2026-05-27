@@ -23,6 +23,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Agentmemory runtime data
+data/
+
 # Temp
 .omo/
 *.tmp
