@@ -43,6 +43,29 @@ Place the plugin file in `.opencode/plugins/`:
 
 Files in this directory are automatically loaded at startup.
 
+### Manual Installation (from GitHub Releases)
+
+1. Download the latest release from [GitHub Releases](https://github.com/Cle2ment/opencode-agentmemory-launcher/releases)
+2. Extract the archive
+3. Copy the `dist/` folder into `.opencode/plugins/agentmemory-launcher/`:
+
+```
+.opencode/plugins/agentmemory-launcher/
+├── agentmemory-launcher.js
+├── agentmemory-launcher.js.map
+├── agentmemory-launcher.d.ts
+└── agentmemory-launcher.d.ts.map
+```
+
+4. Add to your OpenCode config:
+
+```jsonc
+// opencode.json
+{
+  "plugin": ["./plugins/agentmemory-launcher/agentmemory-launcher.js"]
+}
+```
+
 ## Usage
 
 This launcher starts the agentmemory backend. To use agentmemory with OpenCode, also install the agentmemory plugin and refer to the [OpenCode agentmemory plugin usage guide](https://github.com/rohitg00/agentmemory/blob/main/plugin/opencode/README.md) for setup instructions, available tools, and configuration options.
