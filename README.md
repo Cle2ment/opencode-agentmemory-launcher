@@ -3,7 +3,7 @@
 [![Node.js](https://img.shields.io/node/v/opencode-agentmemory-launcher)](https://nodejs.org/)
 [![CI](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml)
 
-# opencode-agentmemory-launcher
+# Agentmemory Launcher for OpenCode
 
 > OpenCode plugin that auto-starts the [agentmemory](https://github.com/agentmemory/agentmemory) backend with health-check supervision.
 
@@ -26,7 +26,7 @@ Add to your OpenCode config:
 ```jsonc
 // opencode.json
 {
-  "plugin": ["opencode-agentmemory-launcher"]
+  "plugin": ["opencode-agentmemory-launcher@latest"]
 }
 ```
 
