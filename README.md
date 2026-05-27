@@ -1,6 +1,6 @@
 # Agentmemory Launcher for OpenCode
 
-> OpenCode plugin that auto-starts the [agentmemory](https://github.com/agentmemory/agentmemory) backend with health-check supervision.
+> OpenCode plugin that auto-starts the [agentmemory](https://github.com/rohitg00/agentmemory) backend with health-check supervision.
 
 [![npm version](https://img.shields.io/npm/v/opencode-agentmemory-launcher)](https://www.npmjs.com/package/opencode-agentmemory-launcher)
 [![License](https://img.shields.io/npm/l/opencode-agentmemory-launcher)](./LICENSE)
@@ -15,7 +15,7 @@
 
 ## What It Does
 
-This plugin automatically starts the agentmemory backend (REST API + iii-engine) when OpenCode loads its configuration. It runs once per OpenCode process and health-checks the backend every 60 seconds, restarting it if the process dies.
+This plugin automatically starts the [agentmemory](https://github.com/rohitg00/agentmemory) backend (REST API + iii-engine) when OpenCode loads its configuration. It runs once per OpenCode process and health-checks the backend every 60 seconds, restarting it if the process dies.
 
 ## Installation
 
@@ -62,7 +62,7 @@ This launcher starts the agentmemory backend. To use agentmemory with OpenCode, 
 ## How It Works
 
 1. **On first config load**: The plugin starts a health-check interval (60s)
-2. **Health check**: Pings `GET /agentmemory/health` on the backend
+2. **Health check**: Pings `GET /agentmemory/livez` on the backend (public, no auth)
 3. **Auto-restart**: If the health check fails, spawns `npx @agentmemory/agentmemory` in a detached process
 4. **Debug mode**: Set `OPENCODE_AGENTMEMORY_DEBUG=1` for verbose logging
 

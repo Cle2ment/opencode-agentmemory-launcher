@@ -57,7 +57,7 @@ Per [OpenCode Plugin API](https://opencode.ai/docs/en/plugins/) — `@opencode-a
 | Workflow | Trigger | Action |
 |----------|---------|--------|
 | `ci.yml` | push/PR to `master`/`main` (skip: `**/*.md`, `LICENSE`, `.github/**`) | typecheck → build → test (Node 18/20/22) |
-| `cd.yml` | push `v*` tag | ci steps + `npm publish --provenance` |
+| `cd.yml` | push `v*` tag | typecheck → build → `npm publish --provenance` → GitHub Release (`src/agentmemory-launcher.ts`) |
 
 Release: `npm version patch && git push --follow-tags`
 
