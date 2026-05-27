@@ -1,4 +1,4 @@
-# Contributing to agentmemory-launcher
+# Contributing to opencode-agentmemory-launcher
 
 Thanks for your interest in contributing!
 
@@ -21,7 +21,7 @@ For security vulnerabilities, see [SECURITY.md](./SECURITY.md) — do **not** re
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/agentmemory-launcher`
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/opencode-agentmemory-launcher`
 3. Install dependencies: `npm install`
 4. Create a branch: `git checkout -b feat/my-feature`
 
@@ -52,9 +52,9 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 - `feat:` — new feature
 - `fix:` — bug fix
 - `docs:` — documentation only
-- `chore:` — maintenance
-- `refactor:` — code restructuring
-- `ci:` — CI/CD changes
+- `chore:` — build, deps, config
+- `refactor:` — code restructure
+- `ci:` — CI/CD workflows
 
 ## License
 
