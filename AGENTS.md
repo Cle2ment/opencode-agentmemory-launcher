@@ -1,51 +1,54 @@
-# AGENTS.md — agentmemory-launcher
+# AGENTS.md — opencode-agentmemory-launcher
 
-## Project Overview
+## Overview
 
-`agentmemory-launcher` is an OpenCode plugin that auto-starts the agentmemory backend. It is a single-file TypeScript plugin with zero runtime dependencies beyond `@opencode-ai/plugin` and the agentmemory process itself.
+Single-file OpenCode plugin that auto-starts the agentmemory backend on config load with 60s health-check supervision.
 
 ## Architecture
 
 ```
-src/
-└── agentmemory-launcher.ts    # Single plugin entry point
+src/agentmemory-launcher.ts   # Plugin entry (61 lines)
 ```
 
-The plugin exports an `AgentmemoryLauncherPlugin` object conforming to the `@opencode-ai/plugin` interface. On config load, it:
-1. Starts a 60s health-check interval
-2. Pings `GET /agentmemory/health` 
-3. Spawns `npx @agentmemory/agentmemory` if the backend is down
+Flow: config hook → `GET /agentmemory/health` (2s timeout) → spawns `npx @agentmemory/agentmemory` if down.
 
 ## Conventions
 
-- **TypeScript strict mode** — no `any`, no `@ts-ignore`
-- **Single-file plugin** — the launcher is intentionally a single file for minimal overhead
-- **No persistence** — the launcher is stateless; all state lives in the backend process
-- **Process supervision** — uses detached child processes with `child.unref()` to avoid blocking OpenCode exit
+- TypeScript strict — no `any`, no `@ts-ignore`
+- Single export: `AgentmemoryLauncherPlugin: Plugin`
+- Stateless — process supervision via `child.unref()`, no file I/O
+- Runtime dependency: only `@opencode-ai/plugin` (devDeps in `package.json`)
 
-## Development Workflow
+## CI/CD
 
-1. Make changes to `src/agentmemory-launcher.ts`
-2. Run `npm run typecheck` to verify
-3. Run `npm run build` to compile
-4. Test locally by loading as an OpenCode plugin
+| Workflow | Trigger | Action |
+|----------|---------|--------|
+| `ci.yml` | push/PR to `master`/`main` (skip: `**/*.md`, `LICENSE`, `.github/**`) | typecheck → build → test (Node 18/20/22) |
+| `cd.yml` | push `v*` tag | ci steps + `npm publish --provenance` |
+
+Release: `npm version patch && git push --follow-tags`
 
 ## Commit Convention
 
-- `feat:` — new feature
-- `fix:` — bug fix
-- `docs:` — documentation only
-- `chore:` — build, CI, dependencies
-- `refactor:` — code change that neither fixes a bug nor adds a feature
+| Prefix | Use |
+|--------|-----|
+| `feat:` / `fix:` | feature / bug fix |
+| `docs:` | documentation only |
+| `ci:` | CI/CD workflows |
+| `chore:` | build, deps, config |
+| `refactor:` | code restructure (no behavior change) |
 
-## Dependencies
+## Development
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `@opencode-ai/plugin` | `>=0.1.0` | Plugin interface types |
-| `typescript` | `^5.7.0` | Build tooling |
-| `@types/node` | `^22.0.0` | Node.js type definitions |
+```bash
+npm install         # first time only
+npm run typecheck   # verify types
+npm run build       # compile to dist/
+npm test            # (placeholder, exits 0)
+```
+
+Test locally: point OpenCode plugin config at this package.
 
 ## License
 
-AGPL-3.0-only — see [LICENSE](./LICENSE)
+AGPL-3.0-only — [LICENSE](./LICENSE)
