@@ -1,6 +1,6 @@
 {
   "name": "opencode-agentmemory-launcher",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "OpenCode plugin that auto-starts the agentmemory backend with health-check supervision",
   "license": "AGPL-3.0-only",
   "author": "Cle2ment",
