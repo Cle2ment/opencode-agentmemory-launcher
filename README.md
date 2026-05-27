@@ -97,6 +97,8 @@ npm test
 
 ## License
 
-[GNU Affero General Public License v3.0](LICENSE)
+[GNU Affero General Public License v3.0](./LICENSE)
 
-© Cle2ment
+## Copyright
+
+Copyright (C) 2026 Cle2ment.
