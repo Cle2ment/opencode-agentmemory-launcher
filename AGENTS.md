@@ -7,10 +7,43 @@ Single-file OpenCode plugin that auto-starts the agentmemory backend on config l
 ## Architecture
 
 ```
-src/agentmemory-launcher.ts   # Plugin entry (61 lines)
+src/agentmemory-launcher.ts   # Plugin entry
 ```
 
-Flow: config hook → `GET /agentmemory/health` (2s timeout) → spawns `npx @agentmemory/agentmemory` if down.
+Flow: config hook → `GET /agentmemory/livez` (2s timeout) → spawns `npx @agentmemory/agentmemory` if down.
+
+## Agentmemory Backend (Critical Knowledge)
+
+Source: [rohitg00/agentmemory](https://github.com/rohitg00/agentmemory)
+
+### Two-Tier Startup
+```
+npx @agentmemory/agentmemory  (CLI + worker, ~15-30s startup)
+  └─ iii-engine  (binary, detached, PID in ~/.agentmemory/iii.pid)
+       └─ iii-exec → worker  (registers API routes, binds port)
+```
+
+### Health Endpoints (CRITICAL)
+| Endpoint | Auth | Use |
+|----------|------|-----|
+| `GET /agentmemory/livez` | **public, no auth** | Use for liveness checks |
+| `GET /agentmemory/health` | **requires auth when `AGENTMEMORY_SECRET` set** | Full health snapshot, 200/503 |
+
+> DO NOT switch back to `/health` — it returns 401 when auth is enabled, causing infinite restart loops.
+
+### Known Pitfalls
+- **StateKV timeout**: after 12-24h uptime, `state::set` may timeout → `/health` returns 503. `/livez` unaffected.
+- **npx caching**: `npx @agentmemory/agentmemory` may serve stale cached version; clear with `npx clear-npx-cache`.
+- **Engine version pin**: agentmemory pins iii-engine to v0.11.2 (v0.11.6+ has incompatible sandbox model).
+- **Windows**: no binary auto-download; Docker fallback needed.
+
+## Plugin API Compliance
+
+Per [OpenCode Plugin API](https://opencode.ai/docs/en/plugins/) — `@opencode-ai/plugin`:
+
+- **`dispose` hook**: MANDATORY for plugins that start persistent resources (timers, processes). Must clear `setInterval`.
+- **`client.app.log()`**: Use for structured logging, not `console.error`.
+- **`config` hook**: called on every config load. Guard with `if (!timer)` for once-only init.
 
 ## Conventions
 
