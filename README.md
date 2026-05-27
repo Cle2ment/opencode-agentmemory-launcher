@@ -45,26 +45,15 @@ Files in this directory are automatically loaded at startup.
 
 ### Manual Installation (from GitHub Releases)
 
-1. Download the latest release from [GitHub Releases](https://github.com/Cle2ment/opencode-agentmemory-launcher/releases)
-2. Extract the archive
-3. Copy the `dist/` folder into `.opencode/plugins/agentmemory-launcher/`:
+1. Download `agentmemory-launcher.ts` from the latest [GitHub Release](https://github.com/Cle2ment/opencode-agentmemory-launcher/releases)
+2. Place it in `.opencode/plugins/`:
 
 ```
-.opencode/plugins/agentmemory-launcher/
-├── agentmemory-launcher.js
-├── agentmemory-launcher.js.map
-├── agentmemory-launcher.d.ts
-└── agentmemory-launcher.d.ts.map
+.opencode/plugins/
+└── agentmemory-launcher.ts
 ```
 
-4. Add to your OpenCode config:
-
-```jsonc
-// opencode.json
-{
-  "plugin": ["./plugins/agentmemory-launcher/agentmemory-launcher.js"]
-}
-```
+OpenCode loads `.ts` files from `.opencode/plugins/` automatically at startup.
 
 ## Usage
 
