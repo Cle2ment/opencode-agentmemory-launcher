@@ -37,6 +37,7 @@ function launch(): void {
     stdio: "ignore",
     shell: true,
     windowsHide: true,
+    env: { ...process.env, AGENTMEMORY_TOOLS: "all" },
   });
 
   child.on("error", (err: NodeJS.ErrnoException) => {
