@@ -7,7 +7,7 @@
 [![Node.js](https://img.shields.io/node/v/opencode-agentmemory-launcher)](https://nodejs.org/)
 [![CI](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml)
 
-[English](/README.md) | [中文](/docs/README.zh.md) | [Français](/docs/README.zh.md)
+[English](/README.md) | [中文](/docs/README.zh.md) | [Français](/docs/README.fr.md)
 
 ## Requirements
 
