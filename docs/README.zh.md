@@ -97,6 +97,7 @@ Get-ChildItem "$env:LOCALAPPDATA\npm-cache\_npx" -Directory | Where-Object {
 ## 环境变量
 
 | 变量 | 默认值 | 描述 |
+|------|--------|------|
 | `AGENTMEMORY_URL` | `http://localhost:3111` | 后端 API 地址 |
 | `OPENCODE_AGENTMEMORY_DEBUG` | 未设置 | 设为 `1` 以启用调试日志 |
 

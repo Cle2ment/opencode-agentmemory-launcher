@@ -97,6 +97,7 @@ Redémarrez OpenCode pour relancer agentmemory avec la version mise à jour.
 ## Variables d'environnement
 
 | Variable | Valeur par défaut | Description |
+|----------|------------------|-------------|
 | `AGENTMEMORY_URL` | `http://localhost:3111` | URL de l'API backend |
 | `OPENCODE_AGENTMEMORY_DEBUG` | non défini | Définir à `1` pour la journalisation de débogage |
 
