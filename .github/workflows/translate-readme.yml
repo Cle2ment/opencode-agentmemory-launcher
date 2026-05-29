@@ -1,0 +1,44 @@
+name: Translate README
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'README.md'
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Translate to Chinese (zh-CN)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          ESCAPED=$(jq -Rs '.' README.md)
+          curl -s https://api.deepseek.com/beta/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+            -d "{\"model\":\"deepseek-v4-flash\",\"messages\":[{\"role\":\"system\",\"content\":\"你是一个专业的技术文档翻译。将以下Markdown内容翻译为简体中文。\\n\\n规则：\\n1. 保留所有Markdown格式、链接URL、代码块、HTML标签、badge图片链接完全不变\\n2. 技术术语保持英文（如npm、Node.js、API、GitHub、OpenCode、agentmemory、npx、plugin等）\\n3. 只翻译自然语言文本（标题、描述、说明文字）\\n4. 保持原文的文档结构和层级\\n5. \\`\\`\\`代码块内的内容完全不翻译\\n6. 表格内容翻译，但保持表格结构\\n7. 不要添加任何额外说明或注释\"},{\"role\":\"user\",\"content\":$ESCAPED}]}" | jq -r '.choices[0].message.content' > docs/README.zh.md
+
+      - name: Translate to French (fr)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          ESCAPED=$(jq -Rs '.' README.md)
+          curl -s https://api.deepseek.com/beta/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+            -d "{\"model\":\"deepseek-v4-flash\",\"messages\":[{\"role\":\"system\",\"content\":\"Tu es un traducteur technique professionnel. Traduis le contenu Markdown suivant en français.\\n\\nRègles :\\n1. Conserve TOUS les formats Markdown, URLs de liens, blocs de code, balises HTML et liens de badges exactement tels quels\\n2. Garde les termes techniques en anglais (npm, Node.js, API, GitHub, OpenCode, agentmemory, npx, plugin, etc.)\\n3. Traduis uniquement le texte en langage naturel (titres, descriptions, texte explicatif)\\n4. Conserve la structure et la hiérarchie du document original\\n5. Ne traduis JAMAIS le contenu à l'intérieur des blocs \\`\\`\\`\\n6. Traduis le contenu des tableaux mais garde leur structure\\n7. N'ajoute aucune note ou commentaire supplémentaire\"},{\"role\":\"user\",\"content\":$ESCAPED}]}" | jq -r '.choices[0].message.content' > docs/README.fr.md
+
+      - name: Commit and push translations
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/README.zh.md docs/README.fr.md
+          git diff --staged --quiet || git commit -m "docs: auto-translate README to zh/fr [skip ci]"
+          git push
