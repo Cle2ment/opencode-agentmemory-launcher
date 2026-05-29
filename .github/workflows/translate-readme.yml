@@ -19,21 +19,55 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          ESCAPED=$(jq -Rs '.' README.md)
-          curl -s https://api.deepseek.com/beta/chat/completions \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-            -d "{\"model\":\"deepseek-v4-flash\",\"messages\":[{\"role\":\"system\",\"content\":\"你是一个专业的技术文档翻译。将以下Markdown内容翻译为简体中文。\\n\\n规则：\\n1. 保留所有Markdown格式、链接URL、代码块、HTML标签、badge图片链接完全不变\\n2. 技术术语保持英文（如npm、Node.js、API、GitHub、OpenCode、agentmemory、npx、plugin等）\\n3. 只翻译自然语言文本（标题、描述、说明文字）\\n4. 保持原文的文档结构和层级\\n5. \\`\\`\\`代码块内的内容完全不翻译\\n6. 表格内容翻译，但保持表格结构\\n7. 不要添加任何额外说明或注释\"},{\"role\":\"user\",\"content\":$ESCAPED}]}" | jq -r '.choices[0].message.content' > docs/README.zh.md
+          cat > /tmp/system_zh.txt << 'SYSEOF'
+          你是一个专业的技术文档翻译。将以下Markdown内容翻译为简体中文。
+
+          规则：
+          1. 保留所有Markdown格式、链接URL、代码块、HTML标签、badge图片链接完全不变
+          2. 技术术语保持英文（如npm、Node.js、API、GitHub、OpenCode、agentmemory、npx、plugin等）
+          3. 只翻译自然语言文本（标题、描述、说明文字）
+          4. 保持原文的文档结构和层级
+          5. 代码块内的内容完全不翻译
+          6. 表格内容翻译，但保持表格结构
+          7. 不要添加任何额外说明或注释
+          SYSEOF
+
+          jq -n \
+            --rawfile system /tmp/system_zh.txt \
+            --rawfile content README.md \
+            '{model: "deepseek-v4-flash", messages: [{role: "system", content: $system}, {role: "user", content: $content}]}' \
+            | curl -s https://api.deepseek.com/beta/chat/completions \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+              -d @- \
+            | jq -r '.choices[0].message.content' > docs/README.zh.md
 
       - name: Translate to French (fr)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          ESCAPED=$(jq -Rs '.' README.md)
-          curl -s https://api.deepseek.com/beta/chat/completions \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-            -d "{\"model\":\"deepseek-v4-flash\",\"messages\":[{\"role\":\"system\",\"content\":\"Tu es un traducteur technique professionnel. Traduis le contenu Markdown suivant en français.\\n\\nRègles :\\n1. Conserve TOUS les formats Markdown, URLs de liens, blocs de code, balises HTML et liens de badges exactement tels quels\\n2. Garde les termes techniques en anglais (npm, Node.js, API, GitHub, OpenCode, agentmemory, npx, plugin, etc.)\\n3. Traduis uniquement le texte en langage naturel (titres, descriptions, texte explicatif)\\n4. Conserve la structure et la hiérarchie du document original\\n5. Ne traduis JAMAIS le contenu à l'intérieur des blocs \\`\\`\\`\\n6. Traduis le contenu des tableaux mais garde leur structure\\n7. N'ajoute aucune note ou commentaire supplémentaire\"},{\"role\":\"user\",\"content\":$ESCAPED}]}" | jq -r '.choices[0].message.content' > docs/README.fr.md
+          cat > /tmp/system_fr.txt << 'FREOF'
+          Tu es un traducteur technique professionnel. Traduis le contenu Markdown suivant en français.
+
+          Règles :
+          1. Conserve TOUS les formats Markdown, URLs de liens, blocs de code, balises HTML et liens de badges exactement tels quels
+          2. Garde les termes techniques en anglais (npm, Node.js, API, GitHub, OpenCode, agentmemory, npx, plugin, etc.)
+          3. Traduis uniquement le texte en langage naturel (titres, descriptions, texte explicatif)
+          4. Conserve la structure et la hiérarchie du document original
+          5. Ne traduis JAMAIS le contenu à l'intérieur des blocs de code
+          6. Traduis le contenu des tableaux mais garde leur structure
+          7. N'ajoute aucune note ou commentaire supplémentaire
+          FREOF
+
+          jq -n \
+            --rawfile system /tmp/system_fr.txt \
+            --rawfile content README.md \
+            '{model: "deepseek-v4-flash", messages: [{role: "system", content: $system}, {role: "user", content: $content}]}' \
+            | curl -s https://api.deepseek.com/beta/chat/completions \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+              -d @- \
+            | jq -r '.choices[0].message.content' > docs/README.fr.md
 
       - name: Commit and push translations
         run: |
