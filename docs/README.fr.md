@@ -1,23 +1,25 @@
-# Agentmemory Launcher for OpenCode
+# Agentmemory Launcher pour OpenCode
 
-> Plugin OpenCode qui démarre automatiquement le backend [agentmemory](https://github.com/rohitg00/agentmemory) avec une supervision par health-check.
+> Plugin OpenCode qui démarre automatiquement le backend [agentmemory](https://github.com/rohitg00/agentmemory) avec une supervision par vérification de l'état.
 
 [![npm version](https://img.shields.io/npm/v/opencode-agentmemory-launcher)](https://www.npmjs.com/package/opencode-agentmemory-launcher)
 [![License](https://img.shields.io/npm/l/opencode-agentmemory-launcher)](./LICENSE)
 [![Node.js](https://img.shields.io/node/v/opencode-agentmemory-launcher)](https://nodejs.org/)
 [![CI](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Cle2ment/opencode-agentmemory-launcher/actions/workflows/ci.yml)
 
+[English](/README.md) | [中文](/docs/README.zh.md) | [Français](/docs/README.fr.md)
+
 ## Prérequis
 
 - **Node.js** ≥ 18.0.0
-- **OpenCode** avec prise en charge des plugins
-- Backend **agentmemory** (installé automatiquement via `npx @agentmemory/agentmemory` s'il n'est pas présent)
+- **OpenCode** avec support des plugins
+- **agentmemory** backend (installé automatiquement via `npx @agentmemory/agentmemory` s'il n'est pas présent)
 
-> **Note :** Ce plugin a uniquement été testé sur Windows 11. Si vous avez besoin de la prise en charge d'autres plateformes, les pull requests sont les bienvenues.
+> **Remarque :** Ce plugin a été testé uniquement sur Windows 11. Si vous avez besoin d'un support pour d'autres plateformes, les pull requests sont les bienvenues.
 
-## Ce qu'il fait
+## Fonctionnement
 
-Ce plugin démarre automatiquement le backend [agentmemory](https://github.com/rohitg00/agentmemory) (REST API + iii-engine) lorsqu'OpenCode charge sa configuration. Il s'exécute une fois par processus OpenCode et vérifie la santé du backend toutes les 60 secondes, en le redémarrant si le processus s'arrête.
+Ce plugin démarre automatiquement le backend [agentmemory](https://github.com/rohitg00/agentmemory) (API REST + iii-engine) lorsque OpenCode charge sa configuration. Il s'exécute une fois par processus OpenCode et vérifie l'état du backend toutes les 60 secondes, en le redémarrant si le processus se termine.
 
 ## Installation
 
@@ -43,11 +45,11 @@ Placez le fichier du plugin dans `.opencode/plugins/` :
 └── agentmemory-launcher.ts
 ```
 
-Les fichiers dans ce répertoire sont automatiquement chargés au démarrage.
+Les fichiers dans ce répertoire sont chargés automatiquement au démarrage.
 
-### Installation manuelle (depuis GitHub Releases)
+### Installation manuelle (depuis les versions GitHub)
 
-1. Téléchargez `agentmemory-launcher.ts` depuis la dernière [GitHub Release](https://github.com/Cle2ment/opencode-agentmemory-launcher/releases)
+1. Téléchargez `agentmemory-launcher.ts` depuis la dernière [version GitHub](https://github.com/Cle2ment/opencode-agentmemory-launcher/releases)
 2. Placez-le dans `.opencode/plugins/` :
 
 ```
@@ -55,11 +57,11 @@ Les fichiers dans ce répertoire sont automatiquement chargés au démarrage.
 └── agentmemory-launcher.ts
 ```
 
-OpenCode charge automatiquement les fichiers `.ts` depuis `.opencode/plugins/` au démarrage.
+OpenCode charge les fichiers `.ts` depuis `.opencode/plugins/` automatiquement au démarrage.
 
 ## Utilisation
 
-Ce lanceur démarre le backend agentmemory. Pour utiliser agentmemory avec OpenCode, installez également le plugin agentmemory et consultez le [guide d'utilisation du plugin OpenCode agentmemory](https://github.com/rohitg00/agentmemory/blob/main/plugin/opencode/README.md) pour les instructions de configuration, les outils disponibles et les options de configuration.
+Ce lanceur démarre le backend agentmemory. Pour utiliser agentmemory avec OpenCode, installez également le plugin agentmemory et consultez le [guide d'utilisation du plugin agentmemory pour OpenCode](https://github.com/rohitg00/agentmemory/blob/main/plugin/opencode/README.md) pour les instructions de configuration, les outils disponibles et les options de configuration.
 
 ## Mise à jour
 
@@ -89,17 +91,17 @@ Redémarrez OpenCode pour relancer agentmemory avec la version mise à jour.
 
 ## Fonctionnement
 
-1. **Au premier chargement de la configuration** : Le plugin démarre un intervalle de health-check (60 s)
-2. **Health-check** : Envoie une requête `GET /agentmemory/livez` au backend (public, sans authentification)
-3. **Redémarrage automatique** : Si le health-check échoue, lance `npx @agentmemory/agentmemory` dans un processus détaché
-4. **Mode debug** : Définissez `OPENCODE_AGENTMEMORY_DEBUG=1` pour une journalisation détaillée
+1. **Au premier chargement de la configuration** : Le plugin démarre une vérification périodique de l'état (60s)
+2. **Vérification de l'état** : Envoie une requête `GET /agentmemory/livez` au backend (public, sans authentification)
+3. **Redémarrage automatique** : Si la vérification de l'état échoue, lance `npx @agentmemory/agentmemory` dans un processus détaché
+4. **Mode débogage** : Définissez `OPENCODE_AGENTMEMORY_DEBUG=1` pour des journaux détaillés
 
 ## Variables d'environnement
 
-| Variable | Valeur par défaut | Description |
-|----------|------------------|-------------|
+| Variable | Défaut | Description |
+|----------|--------|-------------|
 | `AGENTMEMORY_URL` | `http://localhost:3111` | URL de l'API backend |
-| `OPENCODE_AGENTMEMORY_DEBUG` | non défini | Définir à `1` pour la journalisation de débogage |
+| `OPENCODE_AGENTMEMORY_DEBUG` | non défini | Définir à `1` pour les journaux de débogage |
 
 ## API
 
@@ -111,7 +113,7 @@ import type { Plugin } from "@opencode-ai/plugin";
 export const AgentmemoryLauncherPlugin: Plugin;
 ```
 
-Ce plugin implémente le hook de cycle de vie `config`, qui est appelé à chaque fois qu'OpenCode charge sa configuration.
+Ce plugin implémente le hook de cycle de vie `config`, qui est appelé chaque fois qu'OpenCode charge sa configuration.
 
 ## Développement
 
@@ -122,7 +124,7 @@ npm install
 # Vérification des types
 npm run typecheck
 
-# Compilation
+# Compiler
 npm run build
 
 # Exécuter les tests
@@ -139,6 +141,6 @@ npm test
 
 [GNU Affero General Public License v3.0](./LICENSE)
 
-## Droits d'auteur
+## Copyright
 
 Copyright (C) 2026 Cle2ment.
