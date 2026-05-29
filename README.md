@@ -13,6 +13,8 @@
 - **OpenCode** with plugin support
 - **agentmemory** backend (auto-installed via `npx @agentmemory/agentmemory` if not present)
 
+> **Note:** This plugin has only been tested on Windows 11. If you need support for other platforms, pull requests are welcome.
+
 ## What It Does
 
 This plugin automatically starts the [agentmemory](https://github.com/rohitg00/agentmemory) backend (REST API + iii-engine) when OpenCode loads its configuration. It runs once per OpenCode process and health-checks the backend every 60 seconds, restarting it if the process dies.
