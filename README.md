@@ -59,6 +59,32 @@ OpenCode loads `.ts` files from `.opencode/plugins/` automatically at startup.
 
 This launcher starts the agentmemory backend. To use agentmemory with OpenCode, also install the agentmemory plugin and refer to the [OpenCode agentmemory plugin usage guide](https://github.com/rohitg00/agentmemory/blob/main/plugin/opencode/README.md) for setup instructions, available tools, and configuration options.
 
+## Updating
+
+To update agentmemory to the latest version:
+
+```bash
+npx @agentmemory/agentmemory upgrade
+```
+
+After updating, stop the running agentmemory process and clear the npx cache:
+
+**Windows (PowerShell):**
+
+```powershell
+# Stop the agentmemory process
+Get-Process -Name "node" | Where-Object {
+    (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine -match 'agentmemory'
+} | Stop-Process -Force
+
+# Clear the npx cache
+Get-ChildItem "$env:LOCALAPPDATA\npm-cache\_npx" -Directory | Where-Object {
+    Test-Path "$($_.FullName)\node_modules\@agentmemory"
+} | Remove-Item -Recurse -Force
+```
+
+Restart OpenCode to relaunch agentmemory with the updated version.
+
 ## How It Works
 
 1. **On first config load**: The plugin starts a health-check interval (60s)
