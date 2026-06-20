@@ -39,11 +39,13 @@ npx @agentmemory/agentmemory  (CLI + worker, ~15-30s startup)
 
 ## Plugin API Compliance
 
-Per [OpenCode Plugin API](https://opencode.ai/docs/en/plugins/) — `@opencode-ai/plugin`:
+Per [OpenCode Plugin API](https://opencode.ai/docs/en/plugins/) — `@opencode-ai/plugin` v1.15+ (Hooks interface):
 
-- **`dispose` hook**: MANDATORY for plugins that start persistent resources (timers, processes). Must clear `setInterval`.
+- **`config` hook**: called on every config load. Guard with `if (!timer)` for once-only init. Signature: `config?: (input: Config) => Promise<void>`.
+- **`event` hook**: subscribe to lifecycle events including `server.instance.disposed`. Use for cleanup.
+- **`timer.unref()`**: mark the health-check interval as non-blocking so it never prevents the Node process from exiting. Replaces the need for a `dispose` hook.
+- **`dispose` does NOT exist**: the OpenCode `Hooks` interface has no `dispose` property. DO NOT return a `dispose` property from the plugin function — it will never be called. Use `timer.unref()` + the `event` hook instead.
 - **`client.app.log()`**: Use for structured logging, not `console.error`.
-- **`config` hook**: called on every config load. Guard with `if (!timer)` for once-only init.
 
 ## Conventions
 
