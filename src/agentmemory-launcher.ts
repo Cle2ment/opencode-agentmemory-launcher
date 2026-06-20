@@ -1,4 +1,4 @@
-import type { Plugin } from "@opencode-ai/plugin";
+import type { Plugin, Config } from "@opencode-ai/plugin";
 import { spawn } from "node:child_process";
 
 // ── agentmemory-launcher ──
@@ -77,10 +77,11 @@ export const AgentmemoryLauncherPlugin: Plugin = async ({ client }) => {
   }
 
   return {
-    config: async () => {
+    config: async (_config: Config) => {
       // first call only — start the health-check loop
       if (!timer) {
         timer = setInterval(checkAndRestart, HEALTH_INTERVAL);
+        timer.unref();
         await log("info", "health-check loop started");
       }
 
@@ -90,14 +91,6 @@ export const AgentmemoryLauncherPlugin: Plugin = async ({ client }) => {
       } catch (err) {
         await log("error", `config hook check failed: ${String(err)}`);
       }
-    },
-
-    dispose: async () => {
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
-      }
-      await log("info", "health-check loop stopped");
     },
   };
 };
