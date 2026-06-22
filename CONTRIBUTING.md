@@ -21,7 +21,7 @@ For security vulnerabilities, see [SECURITY.md](./SECURITY.md) — do **not** re
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/opencode-agentmemory-launcher`
+2. Clone your fork: `git clone https://github.com/Cle2ment/opencode-agentmemory-launcher`
 3. Install dependencies: `npm install`
 4. Create a branch: `git checkout -b feat/my-feature`
 
