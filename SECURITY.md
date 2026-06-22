@@ -9,7 +9,7 @@ Instead, report it privately via email to the maintainers.
 
 ### Reporting Process
 
-1. **Email**: Send a detailed report to `security@agentmemory.dev` (or open a private
+1. **Email**: Send a detailed report to `yikun.chen@163.com` (or open a private
    security advisory on GitHub if the repository has them enabled).
 2. **Include**: A clear description of the vulnerability, steps to reproduce, and
    the affected version(s).
