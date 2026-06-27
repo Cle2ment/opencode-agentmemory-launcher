@@ -1,4 +1,4 @@
-import type { Plugin, Config } from "@opencode-ai/plugin";
+import type { Plugin, Hooks, PluginInput, Config } from "@opencode-ai/plugin";
 import { spawn } from "node:child_process";
 
 // ── agentmemory-launcher ──
@@ -53,7 +53,9 @@ function launch(): void {
   child.unref();
 }
 
-export const AgentmemoryLauncherPlugin: Plugin = async ({ client }) => {
+export const AgentmemoryLauncherPlugin: Plugin = async (input: PluginInput) => {
+  const { client } = input;
+
   const log = async (level: "info" | "warn" | "error" | "debug", message: string) => {
     try {
       await client.app.log({
@@ -92,5 +94,20 @@ export const AgentmemoryLauncherPlugin: Plugin = async ({ client }) => {
         await log("error", `config hook check failed: ${String(err)}`);
       }
     },
-  };
+    event: async ({ event }: { event: { type: string } }) => {
+      // Clear timer on server instance disposal to allow clean Node process exit
+      if (event.type === "server.instance.disposed" && timer) {
+        clearInterval(timer);
+        timer = null;
+        await log("info", "health-check loop stopped (server disposed)");
+      }
+    },
+    dispose: async () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        await log("info", "health-check loop stopped (dispose)");
+      }
+    },
+  } as Hooks;
 };
