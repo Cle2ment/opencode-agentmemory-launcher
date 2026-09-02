@@ -12,7 +12,7 @@
 ## Requirements
 
 - **Node.js** ≥ 18.0.0
-- **OpenCode** with plugin support
+- **OpenCode V1** (`opencode` ≥ 1.17.10) or **OpenCode V2** (`opencode2`) — the same package serves both hosts
 - **agentmemory** backend (auto-installed via `npx @agentmemory/agentmemory` if not present)
 
 > **Note:** This plugin has only been tested on Windows 11. If you need support for other platforms, pull requests are welcome.
@@ -25,16 +25,25 @@ This plugin automatically starts the [agentmemory](https://github.com/rohitg00/a
 
 ### From npm (recommended)
 
-Add to your OpenCode config:
+**OpenCode V1** — add to your `opencode.json` (`plugin`, singular):
 
 ```jsonc
-// opencode.json
 {
   "plugin": ["opencode-agentmemory-launcher@latest"]
 }
 ```
 
-OpenCode will automatically install the package at startup. See the [OpenCode Plugins documentation](https://opencode.ai/docs/en/plugins/) for more details.
+**OpenCode V2** — add to your config (`plugins`, plural):
+
+```jsonc
+{
+  "plugins": ["opencode-agentmemory-launcher@latest"]
+}
+```
+
+OpenCode will automatically install the package at startup. See the [V1 plugins documentation](https://opencode.ai/docs/en/plugins/) or the [V2 plugins guide](https://opencode.ai/v2/docs/build/plugins) for more details.
+
+The same package runs on both hosts through a combined default export: V1 calls `server()`, V2 calls `setup()`.
 
 ### From local file
 
@@ -45,7 +54,7 @@ Place the plugin file in `.opencode/plugins/`:
 └── agentmemory-launcher.ts
 ```
 
-Files in this directory are automatically loaded at startup.
+Files in this directory are automatically loaded at startup by both V1 and V2.
 
 ### Manual Installation (from GitHub Releases)
 
@@ -91,7 +100,7 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 
 ## How It Works
 
-1. **On first config load**: The plugin starts a health-check interval (60s)
+1. **On load** (V1: first `config` hook call · V2: `setup()`): the plugin starts a health-check interval (60s)
 2. **Health check**: Pings `GET /agentmemory/livez` on the backend (public, no auth)
 3. **Auto-restart**: If the health check fails, spawns `npx @agentmemory/agentmemory` in a detached process
 4. **Debug mode**: Set `OPENCODE_AGENTMEMORY_DEBUG=1` for verbose logging
@@ -105,15 +114,23 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 
 ## API
 
-The plugin exports a single object conforming to the `@opencode-ai/plugin` interface:
+The plugin ships a dual-track module: the default export carries both host entrypoints, and a named export preserves the classic V1 plugin for existing consumers.
 
 ```typescript
 import type { Plugin } from "@opencode-ai/plugin";
 
+// V1 entrypoint (named export, kept for back-compat)
 export const AgentmemoryLauncherPlugin: Plugin;
+
+// Combined dual-track default export
+export default {
+  id: "agentmemory-launcher",
+  server: AgentmemoryLauncherPlugin, // called by OpenCode V1
+  setup: async (context) => { /* start supervision; return cleanup */ }, // called by OpenCode V2
+};
 ```
 
-This plugin implements the `config` lifecycle hook, which is called each time OpenCode loads its configuration.
+On V1, the plugin implements the `config` lifecycle hook (called each time OpenCode loads its configuration) plus `event`/`dispose` cleanup. On V2, supervision starts in `setup()` when the plugin loads, and the returned cleanup function stops the health-check loop.
 
 ## Development
 

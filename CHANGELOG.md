@@ -5,6 +5,16 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-02
+
+### Added
+- Dual-track support: one package now runs on both OpenCode V1 (`opencode`) and V2 (`opencode2`) via a combined default export `{ id, server, setup }` — V1 calls `server()` for the classic Hooks API, V2 calls `setup()` and receives a cleanup function
+- `exports["./server"]` alias in package.json (the V1 host's preferred entrypoint)
+
+### Changed
+- Supervision logic (health loop / spawn / stop) extracted from the V1 `config` hook into shared internals reused by both tracks; V2 starts supervision in `setup()` because V2 has no `config` hook
+- V2 track logs to stderr (warn/error always, info/debug only with `OPENCODE_AGENTMEMORY_DEBUG=1`) since `client.app.log()` has no V2 equivalent
+
 ## [1.0.2] - 2026-05-27
 
 ### Changed

@@ -27,6 +27,10 @@
     ".": {
       "types": "./dist/agentmemory-launcher.d.ts",
       "import": "./dist/agentmemory-launcher.js"
+    },
+    "./server": {
+      "types": "./dist/agentmemory-launcher.d.ts",
+      "import": "./dist/agentmemory-launcher.js"
     }
   },
   "files": [
