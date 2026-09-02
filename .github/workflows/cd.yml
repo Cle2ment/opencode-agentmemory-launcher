@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: "https://registry.npmjs.org"
 
       - run: npm ci
@@ -36,9 +36,9 @@ jobs:
 
       - run: npm run build
 
+      # Trusted publishing (OIDC): no npm token needed — npm CLI ≥11.5.1
+      # authenticates via the GitHub Actions OIDC identity registered on npmjs.com
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
