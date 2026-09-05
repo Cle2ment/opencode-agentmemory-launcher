@@ -1,15 +1,10 @@
 import type { Plugin, PluginModule, Hooks, PluginInput, Config } from "@opencode-ai/plugin";
 import { spawn } from "node:child_process";
-import { closeSync, mkdirSync, openSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 
 // ── agentmemory-launcher ──
 // Auto-starts the full agentmemory backend (REST API + iii-engine).
 // Uses /agentmemory/livez (always public, no auth) for health checks.
 // Health-checks every 60s and restarts the backend if it is down.
-// Backend output is captured to ~/.agentmemory/agentmemory.log
-// (truncated on every start); view it with the `agentmemory-logs` CLI.
 //
 // Dual-track plugin: a single default export serves both OpenCode hosts.
 //   OpenCode V1 (`opencode`):  reads `server` -> V1 Hooks (config/event/dispose)
@@ -21,10 +16,6 @@ const API = process.env.AGENTMEMORY_URL || "http://localhost:3111";
 const DEBUG = process.env.OPENCODE_AGENTMEMORY_DEBUG === "1";
 const HEALTH_INTERVAL = 60_000;
 const HEALTH_TIMEOUT = 2000;
-
-const AGENTMEMORY_DIR = join(homedir(), ".agentmemory");
-/** Backend stdout/stderr capture, truncated on every backend start. */
-export const AGENTMEMORY_LOG_PATH = join(AGENTMEMORY_DIR, "agentmemory.log");
 
 let starting = false;
 let checking = false;
@@ -57,48 +48,25 @@ function launch(): void {
   if (starting) return;
   starting = true;
 
-  // Capture backend output to a log file (truncated on every start so the file
-  // cannot grow unbounded). If the directory is unwritable, fall back to
-  // `stdio: "ignore"` — supervision must keep working without the log.
-  let logFd: number | null = null;
-  try {
-    mkdirSync(AGENTMEMORY_DIR, { recursive: true });
-    logFd = openSync(AGENTMEMORY_LOG_PATH, "w");
-  } catch {
-    logFd = null;
-  }
+  const child = spawn("npx", ["-y", "@agentmemory/agentmemory"], {
+    detached: true,
+    stdio: "ignore",
+    shell: true,
+    windowsHide: true,
+    env: { ...process.env, AGENTMEMORY_TOOLS: "all" },
+  });
 
-  try {
-    const child = spawn("npx", ["-y", "@agentmemory/agentmemory"], {
-      // Windows: do NOT use `detached: true` — a detached cmd.exe has no console,
-      // so Windows allocates a NEW VISIBLE console window for the first console-app
-      // grandchild (npx/node), popping a foreground terminal tab. With
-      // windowsHide:true and detached:false, cmd gets a hidden console that all
-      // descendants attach to: startup stays silent.
-      stdio: logFd === null ? "ignore" : ["ignore", logFd, logFd],
-      shell: true,
-      windowsHide: true,
-      env: { ...process.env, AGENTMEMORY_TOOLS: "all" },
-    });
-
-    child.on("error", (err: NodeJS.ErrnoException) => {
-      if (DEBUG) console.error("[agentmemory-launcher] spawn failed:", err.message);
-      starting = false;
-    });
-
-    child.on("exit", (code) => {
-      if (DEBUG) console.error(`[agentmemory-launcher] engine exited (code ${code}), will restart on next check`);
-      starting = false;
-    });
-
-    child.unref();
-  } catch (err) {
+  child.on("error", (err: NodeJS.ErrnoException) => {
+    if (DEBUG) console.error("[agentmemory-launcher] spawn failed:", err.message);
     starting = false;
-    if (DEBUG) console.error("[agentmemory-launcher] launch failed:", String(err));
-  } finally {
-    // The child duplicated the handles at spawn time; close the parent copy.
-    if (logFd !== null) closeSync(logFd);
-  }
+  });
+
+  child.on("exit", (code) => {
+    if (DEBUG) console.error(`[agentmemory-launcher] engine exited (code ${code}), will restart on next check`);
+    starting = false;
+  });
+
+  child.unref();
 }
 
 async function checkAndRestart(log: LogFn): Promise<void> {

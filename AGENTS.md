@@ -2,18 +2,16 @@
 
 ## Overview
 
-OpenCode plugin that auto-starts the agentmemory backend on load with 60s health-check supervision, plus a small `agentmemory-logs` CLI. Dual-track: one package runs on both OpenCode V1 (`opencode`) and V2 (`opencode2`).
+Single-file OpenCode plugin that auto-starts the agentmemory backend on load with 60s health-check supervision. Dual-track: one package runs on both OpenCode V1 (`opencode`) and V2 (`opencode2`).
 
 ## Architecture
 
 ```
 src/agentmemory-launcher.ts   # Plugin entry (combined V1 + V2 module)
-src/logs.ts                   # `agentmemory-logs` bin: tail/follow the backend log
 ```
 
 Flow (both hosts): on plugin load → `GET /agentmemory/livez` (2s timeout) → spawns `npx @agentmemory/agentmemory` if down → 60s supervision loop.
 V1 enters via the `config` hook; V2 enters via `setup()`.
-Backend output is captured to `~/.agentmemory/agentmemory.log` (truncated each start); view with `agentmemory-logs` (`--tab` for a new Windows Terminal tab).
 
 ## Agentmemory Backend (Critical Knowledge)
 
@@ -35,7 +33,6 @@ npx @agentmemory/agentmemory  (CLI + worker, ~15-30s startup)
 > DO NOT switch back to `/health` — it returns 401 when auth is enabled, causing infinite restart loops.
 
 ### Known Pitfalls
-- **Windows console pop-up**: never spawn the backend with `detached: true` — the console-less cmd makes Windows allocate a NEW VISIBLE console for the first console grandchild (npx/node), opening a foreground terminal tab. Use `windowsHide: true` WITHOUT `detached` so descendants attach to the hidden console.
 - **StateKV timeout**: after 12-24h uptime, `state::set` may timeout → `/health` returns 503. `/livez` unaffected.
 - **npx caching**: `npx @agentmemory/agentmemory` may serve stale cached version; clear with `npx clear-npx-cache`.
 - **Engine version pin**: agentmemory pins iii-engine to v0.11.2 (v0.11.6+ has incompatible sandbox model).
@@ -72,7 +69,7 @@ Both loaders' validators tolerate the other track's extra key (verified against 
 
 - TypeScript strict — no `any`, no `@ts-ignore`
 - Exports: combined default `{ id, server, setup }` (dual-track) + named `AgentmemoryLauncherPlugin: Plugin` (V1, back-compat)
-- Stateless — process supervision via `child.unref()`; the only file I/O is child stdio redirection to `~/.agentmemory/agentmemory.log` (truncated on each backend start)
+- Stateless — process supervision via `child.unref()`, no file I/O
 - Runtime dependency: only `@opencode-ai/plugin` (>=1.17.10)
 
 ## CI/CD
