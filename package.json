@@ -33,6 +33,9 @@
       "import": "./dist/agentmemory-launcher.js"
     }
   },
+  "bin": {
+    "agentmemory-logs": "./dist/logs.js"
+  },
   "files": [
     "dist",
     "LICENSE",

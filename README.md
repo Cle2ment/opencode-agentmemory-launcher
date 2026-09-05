@@ -72,6 +72,24 @@ OpenCode loads `.ts` files from `.opencode/plugins/` automatically at startup.
 
 This launcher starts the agentmemory backend. To use agentmemory with OpenCode, also install the agentmemory plugin and refer to the [OpenCode agentmemory plugin usage guide](https://github.com/rohitg00/agentmemory/blob/main/plugin/opencode/README.md) for setup instructions, available tools, and configuration options.
 
+## Logs
+
+The backend starts silently in the background; its output is captured to `~/.agentmemory/agentmemory.log`. The file is truncated on every backend start, so it cannot grow unbounded.
+
+View live logs — prints the last 200 lines and follows:
+
+```bash
+npx opencode-agentmemory-launcher
+```
+
+(or `agentmemory-logs` if the package is installed globally.)
+
+- `agentmemory-logs --tab` — open the live view in a new Windows Terminal tab
+- `agentmemory-logs --lines N` — change how many historical lines are printed
+- `agentmemory-logs --no-follow` — print the tail and exit without following
+
+The agentmemory web Viewer remains available at http://localhost:3113.
+
 ## Updating
 
 To update agentmemory to the latest version:
@@ -102,7 +120,7 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 
 1. **On load** (V1: first `config` hook call · V2: `setup()`): the plugin starts a health-check interval (60s)
 2. **Health check**: Pings `GET /agentmemory/livez` on the backend (public, no auth)
-3. **Auto-restart**: If the health check fails, spawns `npx @agentmemory/agentmemory` in a detached process
+3. **Auto-restart**: If the health check fails, spawns `npx @agentmemory/agentmemory` as a hidden background process (output captured to `~/.agentmemory/agentmemory.log`)
 4. **Debug mode**: Set `OPENCODE_AGENTMEMORY_DEBUG=1` for verbose logging
 
 ## Environment Variables
