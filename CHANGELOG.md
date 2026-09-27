@@ -5,6 +5,17 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-09-27
+
+### Removed
+- **BREAKING:** OpenCode V1 (`opencode` 1.x) support dropped — the package is now V2-only (`opencode2`). Pin `opencode-agentmemory-launcher@^3` if you still need V1
+- Named export `AgentmemoryLauncherPlugin` (V1 entrypoint) and the `exports["./server"]` alias
+- Runtime dependency on `@opencode-ai/plugin`
+
+### Changed
+- Default export is now plain `{ id, setup }` typed with the official stable V2 SDK (`import type { Plugin } from "@opencode/plugin"`, type-only — devDependency, zero runtime footprint)
+- `exports["."]` now carries a `default` condition so the V2 host's Node-path `require.resolve` can resolve the entrypoint (previously `ERR_PACKAGE_PATH_NOT_EXPORTED` → plugin silently skipped on Node runtimes)
+
 ## [2.0.0] - 2026-09-02
 
 ### Added
@@ -53,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Debug logging via `OPENCODE_AGENTMEMORY_DEBUG` env var
 - Configurable backend URL via `AGENTMEMORY_URL` env var
 
+[4.0.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v3.0.0...v4.0.0
+[2.0.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v1.0.2...v2.0.0
 [1.0.2]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v0.1.0...v1.0.0
