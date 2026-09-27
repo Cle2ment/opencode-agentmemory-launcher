@@ -1,4 +1,4 @@
-import type { Plugin, PluginModule, Hooks, PluginInput, Config } from "@opencode-ai/plugin";
+import type { Plugin } from "@opencode/plugin";
 import { spawn } from "node:child_process";
 
 // ── agentmemory-launcher ──
@@ -6,11 +6,9 @@ import { spawn } from "node:child_process";
 // Uses /agentmemory/livez (always public, no auth) for health checks.
 // Health-checks every 60s and restarts the backend if it is down.
 //
-// Dual-track plugin: a single default export serves both OpenCode hosts.
-//   OpenCode V1 (`opencode`):  reads `server` -> V1 Hooks (config/event/dispose)
-//   OpenCode V2 (`opencode2`): reads `setup`  -> cleanup function
-// Each host's loader decodes only its own key and tolerates the other,
-// so `{ id, server, setup }` loads on both (see AGENTS.md "Dual-Track Plugin API").
+// OpenCode V2 plugin: the host loads the default export `{ id, setup }`.
+// Supervision starts in `setup()` (V2 has no `config` hook) and the returned
+// cleanup function stops the loop on plugin unload (e.g. config hot-reload).
 
 const API = process.env.AGENTMEMORY_URL || "http://localhost:3111";
 const DEBUG = process.env.OPENCODE_AGENTMEMORY_DEBUG === "1";
@@ -22,14 +20,13 @@ let checking = false;
 let timer: ReturnType<typeof setInterval> | null = null;
 
 type Level = "info" | "warn" | "error" | "debug";
-type LogFn = (level: Level, message: string) => Promise<void>;
 
-// V2 has no `client.app.log` equivalent — warn/error go to stderr unconditionally,
-// info/debug only in debug mode to keep normal startup quiet.
-const consoleLog: LogFn = async (level, message) => {
+// V2 has no `client.app.log` equivalent — warn/error go to stderr
+// unconditionally, info/debug only in debug mode to keep normal startup quiet.
+async function log(level: Level, message: string): Promise<void> {
   if ((level === "info" || level === "debug") && !DEBUG) return;
   console.error(`[agentmemory-launcher] ${level}: ${message}`);
-};
+}
 
 async function health(): Promise<boolean> {
   try {
@@ -69,7 +66,7 @@ function launch(): void {
   child.unref();
 }
 
-async function checkAndRestart(log: LogFn): Promise<void> {
+async function checkAndRestart(): Promise<void> {
   if (checking) return;
   checking = true;
   try {
@@ -81,14 +78,14 @@ async function checkAndRestart(log: LogFn): Promise<void> {
   }
 }
 
-function startSupervision(log: LogFn): void {
+function startSupervision(): void {
   if (timer) return;
-  timer = setInterval(() => void checkAndRestart(log), HEALTH_INTERVAL);
+  timer = setInterval(() => void checkAndRestart(), HEALTH_INTERVAL);
   timer.unref();
   void log("info", "health-check loop started");
 }
 
-async function stopSupervision(log: LogFn): Promise<void> {
+async function stopSupervision(): Promise<void> {
   if (!timer) return;
   clearInterval(timer);
   timer = null;
@@ -96,7 +93,7 @@ async function stopSupervision(log: LogFn): Promise<void> {
 }
 
 /** Immediate health check on load; starts the backend if it is down. */
-async function ensureRunning(log: LogFn): Promise<void> {
+async function ensureRunning(): Promise<void> {
   try {
     if (!(await health())) launch();
   } catch (err) {
@@ -104,67 +101,18 @@ async function ensureRunning(log: LogFn): Promise<void> {
   }
 }
 
-// ── OpenCode V1 plugin ──
-// The V1 host imports the package entrypoint and calls `default.server(input)`.
-export const AgentmemoryLauncherPlugin: Plugin = async (input: PluginInput) => {
-  const { client } = input;
-
-  const log: LogFn = async (level, message) => {
-    try {
-      await client.app.log({
-        body: { service: "agentmemory-launcher", level, message },
-      });
-    } catch {
-      if (DEBUG) console.error(`[agentmemory-launcher] ${level}: ${message}`);
-    }
-  };
-
-  return {
-    config: async (_config: Config) => {
-      // first call only — start the health-check loop
-      startSupervision(log);
-      // immediate health check on config load
-      await ensureRunning(log);
-    },
-    event: async ({ event }: { event: { type: string } }) => {
-      // Clear timer on server instance disposal to allow clean Node process exit
-      if (event.type === "server.instance.disposed") await stopSupervision(log);
-    },
-    dispose: async () => {
-      await stopSupervision(log);
-    },
-  } as Hooks;
-};
-
-// ── OpenCode V2 plugin ──
-// Structural types kept local: the V2 plugin SDK (0.0.0-beta-*) cannot coexist
-// with this package's ^1.x `@opencode-ai/plugin` dependency, and the V2 host
-// only decodes the shape at runtime anyway.
-interface V2PluginContext {
-  readonly options: Readonly<Record<string, unknown>>;
-}
-type V2Cleanup = () => void | Promise<void>;
-interface V2Plugin {
-  readonly id: string;
-  readonly setup: (context: V2PluginContext) => V2Cleanup | Promise<V2Cleanup | void> | void;
-}
-
-const setupV2: V2Plugin["setup"] = async (_context: V2PluginContext) => {
-  // V2 has no `config` hook; `setup` runs once when the plugin loads.
-  startSupervision(consoleLog);
-  await ensureRunning(consoleLog);
-  // V2 replaces `dispose`/`server.instance.disposed` with a returned cleanup.
-  return () => {
-    void stopSupervision(consoleLog);
-  };
-};
-
-// ── Combined dual-track default export ──
-// V1 host: `default.server(input)` -> V1 Hooks; V2 host: `default.setup(ctx)` -> cleanup.
-const pluginModule: PluginModule & V2Plugin = {
+// The SDK's root entry exposes `Plugin` as a namespace (`export * as Plugin`),
+// so the module interface is referenced as `Plugin.Plugin`.
+const plugin: Plugin.Plugin = {
   id: "agentmemory-launcher",
-  server: AgentmemoryLauncherPlugin,
-  setup: setupV2,
+  setup: async () => {
+    startSupervision();
+    await ensureRunning();
+    // V2 calls the returned cleanup on plugin unload.
+    return () => {
+      void stopSupervision();
+    };
+  },
 };
 
-export default pluginModule;
+export default plugin;

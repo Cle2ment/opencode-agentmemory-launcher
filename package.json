@@ -1,7 +1,7 @@
 {
   "name": "opencode-agentmemory-launcher",
   "version": "3.0.0",
-  "description": "OpenCode plugin that auto-starts the agentmemory backend with health-check supervision",
+  "description": "OpenCode V2 plugin that auto-starts the agentmemory backend with health-check supervision",
   "license": "AGPL-3.0-only",
   "author": "Cle2ment",
   "homepage": "https://github.com/Cle2ment/opencode-agentmemory-launcher#readme",
@@ -26,11 +26,8 @@
   "exports": {
     ".": {
       "types": "./dist/agentmemory-launcher.d.ts",
-      "import": "./dist/agentmemory-launcher.js"
-    },
-    "./server": {
-      "types": "./dist/agentmemory-launcher.d.ts",
-      "import": "./dist/agentmemory-launcher.js"
+      "import": "./dist/agentmemory-launcher.js",
+      "default": "./dist/agentmemory-launcher.js"
     }
   },
   "files": [
@@ -44,10 +41,8 @@
     "typecheck": "tsc --noEmit",
     "test": "echo \"No tests yet\" && exit 0"
   },
-  "dependencies": {
-    "@opencode-ai/plugin": ">=1.17.10"
-  },
   "devDependencies": {
+    "@opencode/plugin": "^2.0.18",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
   },
