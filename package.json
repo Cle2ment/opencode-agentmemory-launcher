@@ -36,7 +36,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "npm run clean && tsc",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "echo \"No tests yet\" && exit 0"
