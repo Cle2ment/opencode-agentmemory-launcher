@@ -1,6 +1,6 @@
 # Agentmemory Launcher pour OpenCode
 
-> Plugin OpenCode qui démarre automatiquement le backend [agentmemory](https://github.com/rohitg00/agentmemory) avec supervision par health-check.
+> Plugin OpenCode qui démarre automatiquement le backend [agentmemory](https://github.com/rohitg00/agentmemory) avec une supervision par health-check.
 
 [![npm version](https://img.shields.io/npm/v/opencode-agentmemory-launcher)](https://www.npmjs.com/package/opencode-agentmemory-launcher)
 [![License](https://img.shields.io/npm/l/opencode-agentmemory-launcher)](./LICENSE)
@@ -15,9 +15,9 @@
 - **Node.js** ≥ 18.0.0
 - Backend **agentmemory** (installé automatiquement via `npx @agentmemory/agentmemory` s'il n'est pas présent)
 
-> **Utilisateurs V1 :** OpenCode V1 (`opencode` 1.x) n'est plus pris en charge à partir de la v4.0.0 — épinglez `opencode-agentmemory-launcher@^3` si vous avez toujours besoin de la V1.
+> **Utilisateurs V1 :** OpenCode V1 (`opencode` 1.x) n'est plus pris en charge à partir de la v4.0.0 — épinglez `opencode-agentmemory-launcher@^3` si vous avez encore besoin de la V1.
 
-> **Remarque :** Ce plugin n'a été testé que sous Windows 11. Si vous avez besoin d'un support pour d'autres plateformes, les pull requests sont les bienvenues.
+> **Note :** Ce plugin n'a été testé que sur Windows 11. Si vous avez besoin d'une prise en charge d'autres plateformes, les pull requests sont les bienvenues.
 
 ## Ce qu'il fait
 
@@ -58,7 +58,7 @@ Les fichiers de ce répertoire sont automatiquement chargés au démarrage.
 └── agentmemory-launcher.ts
 ```
 
-OpenCode charge automatiquement les fichiers `.ts` depuis `.opencode/plugins/` au démarrage.
+OpenCode charge automatiquement les fichiers `.ts` de `.opencode/plugins/` au démarrage.
 
 ## Utilisation
 
@@ -92,21 +92,21 @@ Redémarrez OpenCode pour relancer agentmemory avec la version mise à jour.
 
 ## Comment ça fonctionne
 
-1. **Au chargement** (`setup()`) : le plugin démarre un intervalle de health-check (60 s)
-2. **Health-check** : effectue un ping `GET /agentmemory/livez` sur le backend (public, sans authentication)
-3. **Redémarrage automatique** : si le health-check échoue, lance `npx @agentmemory/agentmemory` dans un processus détaché
-4. **Mode debug** : définissez `OPENCODE_AGENTMEMORY_DEBUG=1` pour une journalisation détaillée
+1. **Au chargement** (`setup()`) : le plugin démarre un intervalle de health-check (60s)
+2. **Health check** : Pingue `GET /agentmemory/livez` sur le backend (public, sans authentification)
+3. **Redémarrage automatique** : Si le health-check échoue, lance le CLI agentmemory en mode détaché. Sur Windows, le plugin contourne entièrement npx/cmd — il résout `dist/cli.mjs` depuis le cache npx et lance `node` directement dessus, de sorte que l'arborescence de processus (node → cli.mjs → iii.exe) ne touche jamais cmd.exe et n'alloue jamais de console : aucune fenêtre/onglet de terminal n'apparaît et aucun focus n'est volé (`windowsHide` seul est insuffisant car chaque saut par cmd.exe permet à un petit-fils d'allouer une nouvelle console). Revient à un spawn npx lorsque le cache est froid. Les relances sont limitées par une fenêtre de grâce de démarrage de 90s ainsi qu'un verrou de lancement inter-instances (plusieurs serveurs OpenCode partagent un seul backend)
+4. **Mode debug** : Définissez `OPENCODE_AGENTMEMORY_DEBUG=1` pour une journalisation détaillée
 
 ## Variables d'environnement
 
 | Variable | Valeur par défaut | Description |
-|----------|-------------------|-------------|
+|----------|---------|-------------|
 | `AGENTMEMORY_URL` | `http://localhost:3111` | URL de l'API du backend |
 | `OPENCODE_AGENTMEMORY_DEBUG` | non définie | Définir à `1` pour la journalisation de debug |
 
 ## API
 
-Le plugin cible l'API de plugin OpenCode V2 (`@opencode/plugin` >= 2.0.18). La supervision démarre dans `setup()` lorsque le plugin se charge, et la fonction de nettoyage retournée arrête la boucle de health-check au déchargement.
+Le plugin cible l'API de plugin OpenCode V2 (`@opencode/plugin` >= 2.0.18). La supervision démarre dans `setup()` au chargement du plugin, et la fonction de nettoyage retournée arrête la boucle de health-check lors du déchargement.
 
 ```typescript
 import type { Plugin } from "@opencode/plugin";
