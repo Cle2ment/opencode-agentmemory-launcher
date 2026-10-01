@@ -36,9 +36,19 @@ const NPM_PACKAGE = "@agentmemory/agentmemory";
 // and concurrent launches race on the engine port and can keep killing each
 // other's backend. The lock self-expires via staleness (no deletion needed).
 const LOCK_PATH = join(tmpdir(), "agentmemory-launcher.lock");
+// Transient /livez flaps (engine GC pause, brief load) must not trigger a
+// launch: a spurious CLI attaches to the still-alive engine and stays as a
+// permanent duplicate worker (~one extra node process per flap). Re-check
+// once after this delay before launching.
+const CONFIRM_RECHECK = 3_000;
+// While the backend stays down, back off exponentially between launch
+// attempts (hard failures like port theft otherwise churn npx/node processes
+// every 90s). Multiplier cap on LAUNCH_GRACE; resets when healthy again.
+const LAUNCH_BACKOFF_CAP = 8;
 
 let checking = false;
 let lastLaunchAt = 0;
+let launchAttempts = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
 
 type Level = "info" | "warn" | "error" | "debug";
@@ -148,12 +158,16 @@ function watch(child: ChildProcess): void {
 
 function launch(): void {
   const now = Date.now();
-  if (now - lastLaunchAt < LAUNCH_GRACE) return;
+  // Exponential backoff across consecutive failed attempts (90s, 180s, …,
+  // capped at 12min). A real crash still retries immediately on first detection.
+  const backoff = LAUNCH_GRACE * Math.min(2 ** launchAttempts, LAUNCH_BACKOFF_CAP);
+  if (now - lastLaunchAt < backoff) return;
   if (!acquireLaunchLock()) {
     void log("info", "another instance is launching the backend; skipping");
     return;
   }
   lastLaunchAt = now;
+  launchAttempts++;
 
   const env = { ...process.env, AGENTMEMORY_TOOLS: "all" };
 
@@ -183,11 +197,22 @@ function launch(): void {
   watch(child);
 }
 
+/** Two consecutive failed probes = backend down (filters transient flaps). */
+async function isBackendDown(): Promise<boolean> {
+  if (await health()) return false;
+  await new Promise<void>((resolve) => setTimeout(resolve, CONFIRM_RECHECK));
+  return !(await health());
+}
+
 async function checkAndRestart(): Promise<void> {
   if (checking) return;
   checking = true;
   try {
-    if (!(await health())) launch();
+    if (await isBackendDown()) {
+      launch();
+    } else {
+      launchAttempts = 0;
+    }
   } catch (err) {
     await log("error", `health check failed: ${String(err)}`);
   } finally {
@@ -212,7 +237,7 @@ async function stopSupervision(): Promise<void> {
 /** Immediate health check on load; starts the backend if it is down. */
 async function ensureRunning(): Promise<void> {
   try {
-    if (!(await health())) launch();
+    if (await isBackendDown()) launch();
   } catch (err) {
     await log("error", `initial check failed: ${String(err)}`);
   }

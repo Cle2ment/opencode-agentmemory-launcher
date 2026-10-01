@@ -5,6 +5,12 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.1] - 2026-10-01
+
+### Changed
+- **Transient `/livez` flaps no longer trigger a launch.** A single failed probe now requires a second confirmation 3s later before the backend is considered down. A spurious launch attaches a permanent duplicate worker (~one extra node process per flap) — this was the largest avoidable resource cost. Real-crash detection latency only grows from ≤60s to ≤63s.
+- **Exponential backoff between launch attempts while the backend stays down** (90s → 180s → … → capped at 12min, reset when healthy). Hard failures (e.g. port theft) previously churned npx/node processes every 90s forever; retries still continue indefinitely.
+
 ## [4.1.0] - 2026-10-01
 
 ### Fixed
