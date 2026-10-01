@@ -94,7 +94,7 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 
 1. **On load** (`setup()`): the plugin starts a health-check interval (60s)
 2. **Health check**: Pings `GET /agentmemory/livez` on the backend (public, no auth)
-3. **Auto-restart**: If the health check fails, spawns `npx @agentmemory/agentmemory` in a detached process
+3. **Auto-restart**: If the health check fails, spawns the agentmemory CLI detached. On Windows the plugin bypasses npx/cmd entirely — it resolves `dist/cli.mjs` from the npx cache and spawns `node` directly on it, so the process tree (node → cli.mjs → iii.exe) never touches cmd.exe and never allocates a console: no terminal window/tab pops up and no focus is stolen (plain `windowsHide` is insufficient because every cmd.exe hop lets a grandchild allocate a new console). Falls back to an npx spawn when the cache is cold. Relaunches are throttled by a 90s boot grace window plus a cross-instance launch lock (multiple OpenCode servers share one backend)
 4. **Debug mode**: Set `OPENCODE_AGENTMEMORY_DEBUG=1` for verbose logging
 
 ## Environment Variables

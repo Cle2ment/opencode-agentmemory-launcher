@@ -5,6 +5,15 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-10-01
+
+### Fixed
+- **Windows: backend launch no longer opens a terminal window/tab or steals focus.** Plain `windowsHide` only hides the direct child; every cmd.exe hop in the npx chain (`shell: true`, npx's `.cmd` shim) lets a grandchild allocate a NEW console, which Windows Terminal surfaced as a focus-stealing tab on every (re)launch. On Windows the plugin now resolves the agentmemory CLI entry (`dist/cli.mjs`) from the npx cache and spawns `node` directly on it — the tree (node → cli.mjs → iii.exe) contains no cmd.exe and never allocates a console (the CLI already spawns iii-engine with `windowsHide` itself). Falls back to the legacy npx spawn when the npx cache is cold or the direct spawn fails.
+- **Concurrent OpenCode servers could race-kill the backend.** Each server runs its own plugin instance; simultaneous relaunches raced on the engine port (one engine binds, the rest crash) and could keep the backend down. Launches are now gated by a cross-instance, self-expiring lock file (`%TEMP%/agentmemory-launcher.lock`) plus a 90s boot grace window.
+
+### Operational note
+- If `iii-engine` suddenly fails to start with `failed to bind ... os error 10013` while nothing listens on the port, the port has likely fallen into a winnat/Hyper-V dynamic excluded port range (`netsh interface ipv4 show excludedportrange protocol=tcp`). Fix (admin): `net stop winnat` → `netsh int ipv4 add excludedportrange protocol=tcp startport=3111 numberofports=3` → `net start winnat`.
+
 ## [4.0.0] - 2026-09-27
 
 ### Removed
