@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Windows launch is now two-mode.** A launch triggered by the startup health check (backend down when the plugin loads) opens a visible Windows Terminal tab titled `agentmemory` (`wt -w 0 nt --title agentmemory …`), so the backend coming up is visible; focus is taken once at startup, which is acceptable. Every later (re)launch from the 60s supervision loop is silent — `node` is spawned directly on the resolved CLI entry with no console anywhere in the tree — so a mid-session or idle recovery never steals focus. If `wt.exe` is unavailable, the startup launch degrades to the silent path.
+- A failed launch no longer implies an iii-engine pin mismatch: the warn names both likely causes — a daemon already answering on the port (0.9.30 refuses to start a second instance) and the enforced iii-engine 0.22.1 pin.
+
 ## [4.1.2] - 2026-10-07
 
 ### Changed

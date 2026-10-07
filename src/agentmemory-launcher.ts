@@ -9,15 +9,18 @@ import { delimiter, join } from "node:path";
 // Uses /agentmemory/livez (always public, no auth) for health checks.
 // Health-checks every 60s and restarts the backend if it is down.
 //
-// Windows: the launch must not create any console window. `windowsHide` alone
-// is NOT enough — it only suppresses the console of the direct child, while
-// every hop through cmd.exe (npx's shim, `shell: true`) lets a grandchild
-// allocate a NEW console, which Windows Terminal surfaces as a focus-stealing
-// tab. So on Windows we bypass npx/cmd entirely and spawn `node` directly on
-// the agentmemory CLI entry resolved from the npx cache. The resulting tree
-// (node → cli.mjs → iii.exe) never touches cmd.exe and never owns a console:
-// the CLI spawns iii-engine with `windowsHide` itself, and console-less Node
-// children do not allocate one.
+// Windows launch is two-mode:
+//  • startup  — the backend is down when the plugin loads, so open a visible
+//    Windows Terminal tab titled "agentmemory" for it. Taking focus once at
+//    startup is acceptable: the user sees the backend come up.
+//  • recovery — every later (re)launch from the 60s supervision loop must be
+//    invisible. `windowsHide` alone is NOT enough there: it only suppresses
+//    the direct child, and every hop through cmd.exe (npx's shim,
+//    `shell: true`) lets a grandchild allocate a NEW console, which Windows
+//    Terminal surfaces as a focus-stealing tab. So recovery bypasses npx/cmd
+//    and spawns `node` directly on the resolved CLI entry; the tree
+//    (node → cli.mjs → iii.exe) never touches cmd.exe and never owns a
+//    console (the CLI spawns iii-engine with `windowsHide` itself).
 //
 // OpenCode V2 plugin: the host loads the default export `{ id, setup }`.
 // Supervision starts in `setup()` (V2 has no `config` hook) and the returned
@@ -50,6 +53,12 @@ let checking = false;
 let lastLaunchAt = 0;
 let launchAttempts = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
+
+/** Startup launches open a visible tab; recovery launches are silent. */
+type LaunchReason = "startup" | "recovery";
+
+/** Title of the visible startup tab (kept stable via --suppressApplicationTitle). */
+const TAB_TITLE = "agentmemory";
 
 type Level = "info" | "warn" | "error" | "debug";
 
@@ -237,7 +246,7 @@ function watch(child: ChildProcess, label: string): void {
     if (code !== 0) {
       void log(
         "warn",
-        `launch process ${label} exited with code ${code} — the backend CLI exited before /agentmemory/livez came up. Run it manually (or \`npx @agentmemory/agentmemory doctor\`) to see the error; agentmemory 0.9.30 requires iii-engine 0.22.1 and rejects a mismatched pin with exit code 1.`,
+        `launch process ${label} exited with code ${code} — the backend CLI exited before /agentmemory/livez came up. Likely causes: a daemon already answers on the port (agentmemory 0.9.30 refuses to start a second instance), or the enforced iii-engine 0.22.1 pin rejected a mismatch. Run \`npx @agentmemory/agentmemory doctor\` for details.`,
       );
     } else if (DEBUG) {
       console.error(`[agentmemory-launcher] launch process ${label} exited (code ${code})`);
@@ -246,10 +255,46 @@ function watch(child: ChildProcess, label: string): void {
   child.unref();
 }
 
-function launch(): void {
+/** Silent launch: node → cli.mjs, no console anywhere in the tree. */
+function spawnSilent(cli: string, env: NodeJS.ProcessEnv, label: string): void {
+  const child = spawn("node", [cli], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+    env,
+  });
+  child.on("error", (err) => {
+    void log("warn", `direct node spawn failed (${err.message}); falling back to npx`);
+    watch(spawnDirect(env), "npx spawn (fallback)");
+  });
+  watch(child, label);
+  void log("info", `launching backend silently via ${label}`);
+}
+
+/**
+ * Startup launch: open a visible Windows Terminal tab running the backend.
+ * Focus is taken once — acceptable at startup, never used on the recovery path.
+ * Degrades to the silent launch when wt.exe is unavailable.
+ */
+function spawnVisibleTab(cli: string, env: NodeJS.ProcessEnv, label: string): void {
+  const child = spawn(
+    "wt.exe",
+    ["-w", "0", "nt", "--title", TAB_TITLE, "--suppressApplicationTitle", "cmd.exe", "/d", "/s", "/c", `node "${cli}"`],
+    { detached: true, stdio: "ignore", windowsHide: true, env },
+  );
+  child.on("error", (err) => {
+    void log("warn", `visible tab spawn failed (${err.message}); falling back to a silent launch`);
+    spawnSilent(cli, env, label);
+  });
+  watch(child, `visible tab → ${label}`);
+  void log("info", `launching backend in a visible tab via ${label}`);
+}
+
+function launch(reason: LaunchReason): void {
   const now = Date.now();
-  // Exponential backoff across consecutive failed attempts (90s, 180s, …,
-  // capped at 12min). A real crash still retries immediately on first detection.
+  // Exponential backoff across consecutive FAILED attempts (90s, 180s, …,
+  // capped at 12min). The startup launch does not count towards it, so the
+  // first recovery attempt still lands ~90s after a failed startup.
   const backoff = LAUNCH_GRACE * Math.min(2 ** launchAttempts, LAUNCH_BACKOFF_CAP);
   if (now - lastLaunchAt < backoff) return;
   if (!acquireLaunchLock()) {
@@ -257,31 +302,24 @@ function launch(): void {
     return;
   }
   lastLaunchAt = now;
-  launchAttempts++;
+  if (reason === "recovery") launchAttempts++;
 
   const env = { ...process.env, AGENTMEMORY_TOOLS: "all" };
+  const resolved = process.platform === "win32" ? resolveCli() : null;
 
-  if (process.platform === "win32") {
-    const resolved = resolveCli();
-    if (resolved) {
-      // Console-free path: node → cli.mjs, no cmd.exe anywhere in the tree.
-      const child = spawn("node", [resolved.path], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-        env,
-      });
-      child.on("error", (err) => {
-        void log("warn", `direct node spawn failed (${err.message}); falling back to npx`);
-        watch(spawnDirect(env), "npx spawn (fallback)");
-      });
-      watch(child, `${resolved.version} (${resolved.path})`);
-      void log("info", `launching backend via ${resolved.version} (${resolved.path})`);
-      return;
+  if (resolved) {
+    const label = `${resolved.version} (${resolved.path})`;
+    if (process.platform === "win32" && reason === "startup") {
+      spawnVisibleTab(resolved.path, env, label);
+    } else {
+      spawnSilent(resolved.path, env, label);
     }
-    void log("info", "agentmemory not found in npx cache or on PATH; falling back to npx spawn");
+    return;
   }
 
+  if (process.platform === "win32") {
+    void log("info", "agentmemory not found in the npm/npx cache or on PATH; falling back to npx spawn");
+  }
   const child = spawnDirect(env);
   child.on("error", (err) => void log("warn", `spawn failed: ${err.message}`));
   watch(child, "npx spawn");
@@ -299,7 +337,7 @@ async function checkAndRestart(): Promise<void> {
   checking = true;
   try {
     if (await isBackendDown()) {
-      launch();
+      launch("recovery");
     } else {
       launchAttempts = 0;
     }
@@ -327,7 +365,7 @@ async function stopSupervision(): Promise<void> {
 /** Immediate health check on load; starts the backend if it is down. */
 async function ensureRunning(): Promise<void> {
   try {
-    if (await isBackendDown()) launch();
+    if (await isBackendDown()) launch("startup");
   } catch (err) {
     await log("error", `initial check failed: ${String(err)}`);
   }
