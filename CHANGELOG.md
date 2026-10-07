@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **npx cache location is no longer assumed to be `%LOCALAPPDATA%/npm-cache`.** npm's cache can be redirected via `npm_config_cache` or a `cache=` line in `~/.npmrc`, and portable installs (e.g. scoop) keep it beside the node bin dir on PATH (`<persist>/nodejs/cache`). On such setups the npx-cache scan silently found nothing and resolution fell back to the global-install scan. All candidate roots are now scanned; highest version still wins.
 - **Windows launch now picks the newest agentmemory across the npx cache *and* global installs.** The direct-`node` fast path previously scanned only the npx cache, so a newer global install (`npm i -g @agentmemory/agentmemory@latest`) was ignored while a stale cached version kept running. Resolution now also scans `PATH` directories for `node_modules/@agentmemory/agentmemory` (and the `<prefix>/lib/node_modules` layout) and selects the highest version.
 
 ### Added

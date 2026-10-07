@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 
 // ── agentmemory-launcher ──
@@ -111,26 +111,54 @@ function readCliCandidate(pkgDir: string): { path: string; version: string } | n
 }
 
 /**
- * Resolve the newest agentmemory CLI entry from the npx cache
- * (%LOCALAPPDATA%/npm-cache/_npx/<hash>/node_modules/@agentmemory/agentmemory).
- * Picks the highest cached version. Returns null when the package has never
- * been npx-cached.
+ * Candidate npm cache directories (`<cache>/_npx` holds npx's installs).
+ * The cache is not always `%LOCALAPPDATA%/npm-cache`: it can be redirected via
+ * `npm_config_cache` or a `cache=` line in `~/.npmrc`, and portable installs
+ * (e.g. scoop) keep it beside the node bin dir that is on PATH
+ * (`<persist>/nodejs/bin` → `<persist>/nodejs/cache`).
+ */
+function npxCacheRoots(): string[] {
+  const roots = new Set<string>();
+  const add = (base: string | undefined): void => {
+    if (!base) return;
+    const clean = base.trim().replace(/^"(.*)"$/, "$1");
+    if (!clean) return;
+    const expanded = clean.startsWith("~") ? join(homedir(), clean.slice(1)) : clean;
+    roots.add(join(expanded, "_npx"));
+  };
+  add(process.env.npm_config_cache);
+  if (process.env.LOCALAPPDATA) add(join(process.env.LOCALAPPDATA, "npm-cache"));
+  try {
+    const match = readFileSync(join(homedir(), ".npmrc"), "utf-8").match(/^\s*cache\s*=\s*(.+?)\s*$/m);
+    if (match) add(match[1]);
+  } catch {
+    // No user-level .npmrc.
+  }
+  for (const entry of (process.env.PATH ?? "").split(delimiter)) {
+    if (entry) add(join(entry, "..", "cache"));
+  }
+  return [...roots];
+}
+
+/**
+ * Resolve the newest agentmemory CLI entry from the npm/npx cache across every
+ * candidate cache root (see `npxCacheRoots`). Picks the highest cached
+ * version. Returns null when the package has never been npx-cached.
  */
 function resolveCliFromNpxCache(): { path: string; version: string } | null {
-  const local = process.env.LOCALAPPDATA;
-  if (!local) return null;
-  const cacheRoot = join(local, "npm-cache", "_npx");
-  let entries: string[];
-  try {
-    entries = readdirSync(cacheRoot);
-  } catch {
-    return null;
-  }
   let best: { path: string; version: string } | null = null;
-  for (const entry of entries) {
-    const pkgDir = join(cacheRoot, entry, "node_modules", "@agentmemory", "agentmemory");
-    const cand = readCliCandidate(pkgDir);
-    if (cand && (!best || compareVersion(cand.version, best.version) > 0)) best = cand;
+  for (const cacheRoot of npxCacheRoots()) {
+    let entries: string[];
+    try {
+      entries = readdirSync(cacheRoot);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const pkgDir = join(cacheRoot, entry, "node_modules", "@agentmemory", "agentmemory");
+      const cand = readCliCandidate(pkgDir);
+      if (cand && (!best || compareVersion(cand.version, best.version) > 0)) best = cand;
+    }
   }
   return best;
 }
