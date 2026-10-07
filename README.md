@@ -127,11 +127,13 @@ npx @agentmemory/agentmemory doctor
 ```
 
 **A visible startup tab shows `agentmemory worker did not become ready within 15s` and exits with code 1.**
-A stale instance from an earlier session is still holding the REST port, so the fresh CLI starts its engine but its worker registration never becomes ready — a healthy fresh start completes in ~2s. Find the leftover(s) and stop them, then let the launcher's supervision loop relaunch:
+A stale instance from an earlier session is still holding the REST port, so the fresh CLI starts its engine but its worker registration never becomes ready — a healthy fresh start completes in ~2s. Diagnose and restart the whole chain (never kill a single worker process: it may be the active route handler, and killing it makes `/agentmemory/livez` return 404):
 
 ```powershell
 Get-NetTCPConnection -LocalPort 3111 -State Listen   # who owns the port
 npx @agentmemory/agentmemory stop                     # stop the instance it belongs to
+# if that leaves the port held, stop the engine + worker pair together and
+# let the launcher's supervision loop relaunch them (~60s, silently)
 ```
 
 **A newer agentmemory is installed but the launcher keeps running an older one.**
