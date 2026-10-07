@@ -273,13 +273,15 @@ function spawnSilent(cli: string, env: NodeJS.ProcessEnv, label: string): void {
 
 /**
  * Startup launch: open a visible Windows Terminal tab running the backend.
+ * No shell is involved — Windows Terminal launches `node` itself, so the
+ * visible path is as shell-free as the silent one (no cmd/pwsh hop).
  * Focus is taken once — acceptable at startup, never used on the recovery path.
  * Degrades to the silent launch when wt.exe is unavailable.
  */
 function spawnVisibleTab(cli: string, env: NodeJS.ProcessEnv, label: string): void {
   const child = spawn(
     "wt.exe",
-    ["-w", "0", "nt", "--title", TAB_TITLE, "--suppressApplicationTitle", "cmd.exe", "/d", "/s", "/c", `node "${cli}"`],
+    ["-w", "0", "nt", "--title", TAB_TITLE, "--suppressApplicationTitle", "node", cli],
     { detached: true, stdio: "ignore", windowsHide: true, env },
   );
   child.on("error", (err) => {
