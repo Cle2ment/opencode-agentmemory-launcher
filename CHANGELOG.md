@@ -5,7 +5,7 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.2.1] - 2026-10-07
 
 ### Changed
 - **The startup tab launches `node` directly — no cmd/pwsh shell hop.** `wt -w 0 nt --title agentmemory --suppressApplicationTitle node <cli>`: Windows Terminal runs the command itself, so the visible path is as shell-free as the silent one (one less process, no shell-quoting layer). pwsh 7 would work too, but a shell buys nothing here.
