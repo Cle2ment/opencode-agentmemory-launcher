@@ -5,7 +5,7 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.2.0] - 2026-10-07
 
 ### Changed
 - **Windows launch is now two-mode.** A launch triggered by the startup health check (backend down when the plugin loads) opens a visible Windows Terminal tab titled `agentmemory` (`wt -w 0 nt --title agentmemory …`), so the backend coming up is visible; focus is taken once at startup, which is acceptable. Every later (re)launch from the 60s supervision loop is silent — `node` is spawned directly on the resolved CLI entry with no console anywhere in the tree — so a mid-session or idle recovery never steals focus. If `wt.exe` is unavailable, the startup launch degrades to the silent path.
