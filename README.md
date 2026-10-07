@@ -12,7 +12,7 @@
 ## Requirements
 
 - **OpenCode V2** (`opencode2`)
-- **Node.js** ≥ 18.0.0
+- **Node.js** ≥ 18.0.0 for the plugin itself; the agentmemory 0.9.30 backend requires **Node.js ≥ 20.0.0**
 - **agentmemory** backend (auto-installed via `npx @agentmemory/agentmemory` if not present)
 
 > **V1 users:** OpenCode V1 (`opencode` 1.x) is no longer supported as of v4.0.0 — pin `opencode-agentmemory-launcher@^3` if you still need V1.
@@ -22,6 +22,14 @@
 ## What It Does
 
 This plugin automatically starts the [agentmemory](https://github.com/rohitg00/agentmemory) backend (REST API + iii-engine) when OpenCode loads its configuration. It runs once per OpenCode process and health-checks the backend every 60 seconds, restarting it if the process dies.
+
+## Compatibility
+
+Built for **agentmemory 0.9.30** (2026-10-06) and backward compatible with earlier releases:
+
+- **Auth is on by default.** agentmemory generates a secret into `~/.agentmemory/secret` on first start. The launcher only calls the always-public `/agentmemory/livez`, so it needs no secret and is unaffected. Hand-written REST calls to `:3111` now need `Authorization: Bearer $(cat ~/.agentmemory/secret)`.
+- **iii-engine 0.22.1.** agentmemory 0.9.30 moved its engine pin from `0.11.2` to `0.22.1` and enforces it. The launcher does not manage the engine (the agentmemory CLI does), but a mismatched pin now exits the CLI with code 1 — the launcher surfaces that as a `warn`.
+- **Newest version wins.** On Windows the launcher starts the newest agentmemory it can find in the npx cache **or a global install on `PATH`**, so `npm i -g @agentmemory/agentmemory@latest` takes effect without clearing the npx cache.
 
 ## Installation
 
@@ -72,6 +80,8 @@ To update agentmemory to the latest version:
 npx @agentmemory/agentmemory upgrade
 ```
 
+If you installed agentmemory globally, update that copy instead with `npm i -g @agentmemory/agentmemory@latest` — the launcher picks the newest version across the npx cache and global installs.
+
 After updating, stop the running agentmemory process and clear the npx cache:
 
 **Windows (PowerShell):**
@@ -93,9 +103,10 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 ## How It Works
 
 1. **On load** (`setup()`): the plugin starts a health-check interval (60s)
-2. **Health check**: Pings `GET /agentmemory/livez` on the backend (public, no auth)
-3. **Auto-restart**: If the health check fails, spawns the agentmemory CLI detached. On Windows the plugin bypasses npx/cmd entirely — it resolves `dist/cli.mjs` from the npx cache and spawns `node` directly on it, so the process tree (node → cli.mjs → iii.exe) never touches cmd.exe and never allocates a console: no terminal window/tab pops up and no focus is stolen (plain `windowsHide` is insufficient because every cmd.exe hop lets a grandchild allocate a new console). Falls back to an npx spawn when the cache is cold. Relaunches are throttled by a 90s boot grace window plus a cross-instance launch lock (multiple OpenCode servers share one backend)
+2. **Health check**: Pings `GET /agentmemory/livez` on the backend (always public, no auth — even with agentmemory 0.9.30's auth-by-default)
+3. **Auto-restart**: If the health check fails, spawns the agentmemory CLI detached. On Windows the plugin bypasses npx/cmd entirely — it resolves the **newest** `dist/cli.mjs` it can find in the npx cache or a global install on `PATH`, and spawns `node` directly on it, so the process tree (node → cli.mjs → iii.exe) never touches cmd.exe and never allocates a console: no terminal window/tab pops up and no focus is stolen (plain `windowsHide` is insufficient because every cmd.exe hop lets a grandchild allocate a new console). Falls back to an npx spawn when no local copy is found. Relaunches are throttled by a 90s boot grace window plus a cross-instance launch lock (multiple OpenCode servers share one backend)
 4. **Debug mode**: Set `OPENCODE_AGENTMEMORY_DEBUG=1` for verbose logging
+5. **Failure diagnostics**: A backend launch that exits with a non-zero code is logged at `warn` — e.g. when agentmemory 0.9.30 rejects a mismatched iii-engine pin with exit code 1
 
 ## Environment Variables
 
@@ -103,6 +114,22 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 |----------|---------|-------------|
 | `AGENTMEMORY_URL` | `http://localhost:3111` | Backend API URL |
 | `OPENCODE_AGENTMEMORY_DEBUG` | unset | Set to `1` for debug logging |
+
+## Troubleshooting
+
+**The backend never comes up and the log shows a non-zero launch exit.**
+agentmemory 0.9.30 enforces its iii-engine pin (v0.22.1). If a different engine is on `PATH`, the CLI exits with code 1. Run it manually to see the error:
+
+```bash
+npx @agentmemory/agentmemory doctor
+```
+
+**A newer agentmemory is installed but the launcher keeps running an older one.**
+The launcher prefers the newest version across the npx cache and global installs; if a stale copy still wins, clear the cache:
+
+```bash
+npx clear-npx-cache
+```
 
 ## API
 

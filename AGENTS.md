@@ -12,7 +12,7 @@ src/agentmemory-launcher.ts   # Plugin entry (V2 module)
 
 Flow: on plugin load (`setup()`) → `GET /agentmemory/livez` (2s timeout) → spawns `npx @agentmemory/agentmemory` if down → 60s supervision loop → cleanup function stops the loop on unload.
 
-Windows launch path: plain `windowsHide` is not enough — it hides only the direct child, and every cmd.exe hop (`shell: true`, npx's `.cmd` shim) lets a grandchild allocate a NEW console, which Windows Terminal shows as a focus-stealing tab. So on Windows the plugin resolves `dist/cli.mjs` from the npx cache (`%LOCALAPPDATA%/npm-cache/_npx/*/node_modules/@agentmemory/agentmemory`, highest version wins) and spawns `node` directly on it: the tree (node → cli.mjs → iii.exe) contains no cmd.exe and never allocates a console (the CLI spawns iii-engine with `windowsHide` itself). Falls back to the legacy npx spawn when the cache is cold or the direct spawn errors. Relaunches are gated by a 90s boot grace window plus a cross-instance self-expiring lock (`%TEMP%/agentmemory-launcher.lock`) because every OpenCode server runs its own plugin instance against the same backend.
+Windows launch path: plain `windowsHide` is not enough — it hides only the direct child, and every cmd.exe hop (`shell: true`, npx's `.cmd` shim) lets a grandchild allocate a NEW console, which Windows Terminal shows as a focus-stealing tab. So on Windows the plugin resolves `dist/cli.mjs` from the **newest** agentmemory it can find — the npx cache (`%LOCALAPPDATA%/npm-cache/_npx/*/node_modules/@agentmemory/agentmemory`) or a global install on `PATH` (`<dir>/node_modules/@agentmemory/agentmemory` and `<prefix>/lib/node_modules/@agentmemory/agentmemory`), highest version wins — and spawns `node` directly on it: the tree (node → cli.mjs → iii.exe) contains no cmd.exe and never allocates a console (the CLI spawns iii-engine with `windowsHide` itself). Falls back to the legacy npx spawn when the cache is cold or the direct spawn errors. Relaunches are gated by a 90s boot grace window plus a cross-instance self-expiring lock (`%TEMP%/agentmemory-launcher.lock`) because every OpenCode server runs its own plugin instance against the same backend.
 
 ## Agentmemory Backend (Critical Knowledge)
 
@@ -29,14 +29,17 @@ npx @agentmemory/agentmemory  (CLI + worker, ~15-30s startup)
 | Endpoint | Auth | Use |
 |----------|------|-----|
 | `GET /agentmemory/livez` | **public, no auth** | Use for liveness checks |
-| `GET /agentmemory/health` | **requires auth when `AGENTMEMORY_SECRET` set** | Full health snapshot, 200/503 |
+| `GET /agentmemory/health` | **requires auth** (always, since 0.9.30) | Full health snapshot, 200/503 |
+| `GET /agentmemory/status` | **requires auth** (added 0.9.30) | Rich self-diagnosis (providers, engine pin, ports, flags); JSON or HTML |
 
-> DO NOT switch back to `/health` — it returns 401 when auth is enabled, causing infinite restart loops.
+> DO NOT switch back to `/health` — since agentmemory 0.9.30 a secret is always generated (`~/.agentmemory/secret`), so `/health` **always** returns 401 without a bearer, causing infinite restart loops.
 
 ### Known Pitfalls
 - **StateKV timeout**: after 12-24h uptime, `state::set` may timeout → `/health` returns 503. `/livez` unaffected.
-- **npx caching**: `npx @agentmemory/agentmemory` may serve stale cached version; clear with `npx clear-npx-cache`.
-- **Engine version pin**: agentmemory pins iii-engine to v0.11.2 (v0.11.6+ has incompatible sandbox model).
+- **npx cache vs global install**: `npx @agentmemory/agentmemory` may serve a stale cached version, and a newer `npm i -g` install is a separate copy. The launcher resolves the **newest** version across the npx cache and `PATH` globals (a newer global install now wins over a stale cache); clear the cache with `npx clear-npx-cache` when needed.
+- **Engine version pin**: agentmemory **0.9.30** pins iii-engine to **v0.22.1** (0.11.2 through 0.9.29) and enforces the pin (`process.exit(1)` on mismatch). The pinned engine auto-installs into `~/.agentmemory/bin/` and is SHA-256 verified. Custom iii configs must keep the `iii-`-prefixed builtin worker names (`iii-http`, `iii-state`, `iii-queue`, `iii-pubsub`, `iii-cron`) — on 0.22.1 the bare names resolve to standalone registry workers.
+- **Auth on by default (0.9.30)**: the daemon generates `~/.agentmemory/secret` (mode 0600) on first start when `AGENTMEMORY_SECRET` is unset. The bundled CLI/viewer/hooks/MCP read it automatically; only hand-written REST calls to `:3111` need `Authorization: Bearer $(cat ~/.agentmemory/secret)`. The launcher only calls the public `/agentmemory/livez`, so it needs no secret.
+- **Silent launch failure on engine-pin mismatch**: the launcher spawns the backend with `stdio: "ignore"`; 0.9.30's enforced engine pin makes a mismatched engine `exit(1)` with no visible output. The plugin logs a `warn` on any non-zero launch exit pointing at the pin.
 - **Windows**: no binary auto-download; Docker fallback needed.
 - **Windows focus-stealing tabs**: any cmd.exe hop in the spawn chain (`shell: true`, npx `.cmd` shim) lets a grandchild allocate a new console → visible WT window/tab. `windowsHide`/`detached` do not propagate down the tree. The only clean fix without external helpers is removing cmd.exe from the chain entirely (spawn `node` directly on `cli.mjs`). The same mechanism applies to `@agentmemory/mcp` stdio servers spawned by OpenCode per session — those flashes come from OpenCode's MCP spawn, not this plugin.
 - **winnat port theft (os error 10013)**: iii-engine can suddenly fail to bind its port with `failed to bind ... 10013` while nothing listens there — the port fell into a winnat/Hyper-V dynamic excluded range (check `netsh interface ipv4 show excludedportrange protocol=tcp`). Durable fix (admin): `net stop winnat` → `netsh int ipv4 add excludedportrange protocol=tcp startport=3111 numberofports=3` → `net start winnat`. Symptom cascade: every plugin instance relaunches every 60s, racer CLIs keep killing each other's engines, backend stays down.

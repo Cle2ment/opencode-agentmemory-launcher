@@ -2,7 +2,7 @@ import type { Plugin } from "@opencode/plugin";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 // ── agentmemory-launcher ──
 // Auto-starts the full agentmemory backend (REST API + iii-engine).
@@ -62,8 +62,10 @@ async function log(level: Level, message: string): Promise<void> {
 
 async function health(): Promise<boolean> {
   try {
-    // /livez is always public (no auth), unlike /health which requires
-    // AGENTMEMORY_SECRET when set. See agentmemory src/triggers/api.ts.
+    // /livez is always public and unauthenticated. As of agentmemory 0.9.30 a
+    // secret is ALWAYS generated into ~/.agentmemory/secret on first start when
+    // AGENTMEMORY_SECRET is unset, so /agentmemory/health is now ALWAYS
+    // authenticated. Keep using /livez; never switch to /health.
     const res = await fetch(`${API}/agentmemory/livez`, {
       signal: AbortSignal.timeout(HEALTH_TIMEOUT),
     });
@@ -85,13 +87,36 @@ function spawnDirect(env: NodeJS.ProcessEnv): ChildProcess {
 }
 
 /**
- * Resolve the agentmemory CLI entry from the npx cache
+ * Read a candidate agentmemory installation from a package directory:
+ * parse `<pkgDir>/package.json`, resolve the `bin` entry (key `"agentmemory"`
+ * when `bin` is an object), and return `{ path, version }` only when the CLI
+ * file exists. Returns null on any missing file or parse/IO error.
+ */
+function readCliCandidate(pkgDir: string): { path: string; version: string } | null {
+  const pkgJsonPath = join(pkgDir, "package.json");
+  if (!existsSync(pkgJsonPath)) return null;
+  try {
+    const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8")) as {
+      version?: string;
+      bin?: string | Record<string, string>;
+    };
+    const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.["agentmemory"];
+    if (!pkg.version || !bin) return null;
+    const cliPath = join(pkgDir, bin);
+    if (!existsSync(cliPath)) return null;
+    return { path: cliPath, version: pkg.version };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the newest agentmemory CLI entry from the npx cache
  * (%LOCALAPPDATA%/npm-cache/_npx/<hash>/node_modules/@agentmemory/agentmemory).
  * Picks the highest cached version. Returns null when the package has never
- * been npx-cached (caller falls back to the legacy npx spawn, which then
- * populates the cache for the next launch).
+ * been npx-cached.
  */
-function resolveCliFromNpxCache(): string | null {
+function resolveCliFromNpxCache(): { path: string; version: string } | null {
   const local = process.env.LOCALAPPDATA;
   if (!local) return null;
   const cacheRoot = join(local, "npm-cache", "_npx");
@@ -104,23 +129,53 @@ function resolveCliFromNpxCache(): string | null {
   let best: { path: string; version: string } | null = null;
   for (const entry of entries) {
     const pkgDir = join(cacheRoot, entry, "node_modules", "@agentmemory", "agentmemory");
-    const pkgJsonPath = join(pkgDir, "package.json");
-    if (!existsSync(pkgJsonPath)) continue;
-    try {
-      const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8")) as {
-        version?: string;
-        bin?: string | Record<string, string>;
-      };
-      const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.["agentmemory"];
-      if (!pkg.version || !bin) continue;
-      const cliPath = join(pkgDir, bin);
-      if (!existsSync(cliPath)) continue;
-      if (!best || compareVersion(pkg.version, best.version) > 0) best = { path: cliPath, version: pkg.version };
-    } catch {
-      continue;
+    const cand = readCliCandidate(pkgDir);
+    if (cand && (!best || compareVersion(cand.version, best.version) > 0)) best = cand;
+  }
+  return best;
+}
+
+/**
+ * Resolve the newest agentmemory CLI entry installed GLOBALLY (npm i -g,
+ * scoop, …) by scanning PATH. For each PATH directory D we check the standard
+ * npm global bin layout (`D/node_modules/...`) and the prefix layout
+ * (`D/../lib/node_modules/...`). Returns the highest-version candidate.
+ */
+function resolveCliFromPath(): { path: string; version: string } | null {
+  const pathEnv = process.env.PATH;
+  if (!pathEnv) return null;
+  let best: { path: string; version: string } | null = null;
+  for (const entry of pathEnv.split(delimiter)) {
+    if (!entry) continue;
+    const pkgDirs = [
+      join(entry, "node_modules", "@agentmemory", "agentmemory"),
+      join(entry, "..", "lib", "node_modules", "@agentmemory", "agentmemory"),
+    ];
+    for (const pkgDir of pkgDirs) {
+      try {
+        const cand = readCliCandidate(pkgDir);
+        if (cand && (!best || compareVersion(cand.version, best.version) > 0)) best = cand;
+      } catch {
+        continue;
+      }
     }
   }
-  return best?.path ?? null;
+  return best;
+}
+
+/**
+ * Resolve the newest agentmemory CLI across the npx cache and any global
+ * install on PATH. Ties keep the first found (npx cache first).
+ */
+function resolveCli(): { path: string; version: string } | null {
+  const candidates = [resolveCliFromNpxCache(), resolveCliFromPath()].filter(
+    (c): c is { path: string; version: string } => c !== null,
+  );
+  let best: { path: string; version: string } | null = null;
+  for (const cand of candidates) {
+    if (!best || compareVersion(cand.version, best.version) > 0) best = cand;
+  }
+  return best;
 }
 
 function compareVersion(a: string, b: string): number {
@@ -149,9 +204,16 @@ function acquireLaunchLock(): boolean {
   }
 }
 
-function watch(child: ChildProcess): void {
+function watch(child: ChildProcess, label: string): void {
   child.on("exit", (code) => {
-    if (DEBUG) console.error(`[agentmemory-launcher] launch process exited (code ${code})`);
+    if (code !== 0) {
+      void log(
+        "warn",
+        `launch process ${label} exited with code ${code} — the backend CLI exited before /agentmemory/livez came up. Run it manually (or \`npx @agentmemory/agentmemory doctor\`) to see the error; agentmemory 0.9.30 requires iii-engine 0.22.1 and rejects a mismatched pin with exit code 1.`,
+      );
+    } else if (DEBUG) {
+      console.error(`[agentmemory-launcher] launch process ${label} exited (code ${code})`);
+    }
   });
   child.unref();
 }
@@ -172,10 +234,10 @@ function launch(): void {
   const env = { ...process.env, AGENTMEMORY_TOOLS: "all" };
 
   if (process.platform === "win32") {
-    const cli = resolveCliFromNpxCache();
-    if (cli) {
+    const resolved = resolveCli();
+    if (resolved) {
       // Console-free path: node → cli.mjs, no cmd.exe anywhere in the tree.
-      const child = spawn("node", [cli], {
+      const child = spawn("node", [resolved.path], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,
@@ -183,18 +245,18 @@ function launch(): void {
       });
       child.on("error", (err) => {
         void log("warn", `direct node spawn failed (${err.message}); falling back to npx`);
-        watch(spawnDirect(env));
+        watch(spawnDirect(env), "npx spawn (fallback)");
       });
-      watch(child);
-      void log("info", `launching backend via ${cli}`);
+      watch(child, `${resolved.version} (${resolved.path})`);
+      void log("info", `launching backend via ${resolved.version} (${resolved.path})`);
       return;
     }
-    void log("info", "agentmemory not found in npx cache; falling back to npx spawn");
+    void log("info", "agentmemory not found in npx cache or on PATH; falling back to npx spawn");
   }
 
   const child = spawnDirect(env);
   child.on("error", (err) => void log("warn", `spawn failed: ${err.message}`));
-  watch(child);
+  watch(child, "npx spawn");
 }
 
 /** Two consecutive failed probes = backend down (filters transient flaps). */

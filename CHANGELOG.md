@@ -5,6 +5,17 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Windows launch now picks the newest agentmemory across the npx cache *and* global installs.** The direct-`node` fast path previously scanned only the npx cache, so a newer global install (`npm i -g @agentmemory/agentmemory@latest`) was ignored while a stale cached version kept running. Resolution now also scans `PATH` directories for `node_modules/@agentmemory/agentmemory` (and the `<prefix>/lib/node_modules` layout) and selects the highest version.
+
+### Added
+- **Visible diagnostics for a failed backend launch.** A launch process exiting with a non-zero code is now logged at `warn` (previously debug-only) with a pointer to `agentmemory doctor`, so agentmemory 0.9.30's enforced iii-engine pin mismatch (`exit(1)`) is no longer silent under `stdio: "ignore"`.
+
+### Notes
+- Verified against **agentmemory 0.9.30** (2026-10-06): auth-by-default does not affect the launcher (it uses the always-public `/agentmemory/livez`); the iii-engine `0.11.2` → `0.22.1` pin move is handled by the agentmemory CLI, not the launcher.
+
 ## [4.1.1] - 2026-10-01
 
 ### Changed
