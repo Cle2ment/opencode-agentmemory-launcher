@@ -120,10 +120,18 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 ## Troubleshooting
 
 **The backend never comes up and the log shows a non-zero launch exit.**
-agentmemory 0.9.30 enforces its iii-engine pin (v0.22.1). If a different engine is on `PATH`, the CLI exits with code 1. Run it manually to see the error:
+Two common causes: agentmemory 0.9.30 enforces its iii-engine pin (v0.22.1), so a different engine on `PATH` makes the CLI exit with code 1; or a stale instance still owns the port. Run it manually to see the actual error:
 
 ```bash
 npx @agentmemory/agentmemory doctor
+```
+
+**A visible startup tab shows `agentmemory worker did not become ready within 15s` and exits with code 1.**
+A stale instance from an earlier session is still holding the REST port, so the fresh CLI starts its engine but its worker registration never becomes ready — a healthy fresh start completes in ~2s. Find the leftover(s) and stop them, then let the launcher's supervision loop relaunch:
+
+```powershell
+Get-NetTCPConnection -LocalPort 3111 -State Listen   # who owns the port
+npx @agentmemory/agentmemory stop                     # stop the instance it belongs to
 ```
 
 **A newer agentmemory is installed but the launcher keeps running an older one.**
