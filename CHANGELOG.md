@@ -5,7 +5,7 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.3.0] - 2026-10-25
 
 ### Changed
 - **Windows launch is now always silent — the startup tab is gone.** A launch triggered by the startup health check (backend down when the plugin loads) now takes the exact path recovery launches have used since 4.1.0: resolve the newest `dist/cli.mjs` and spawn `node` directly on it, so no window, terminal tab, or focus steal ever appears at startup either. The earlier rollback to a visible startup tab (4.2.0) was triggered by console flashes at OpenCode startup that are actually caused by OpenCode's own local-MCP spawns (`cmd.exe /d /s /c npx …` allocates a console per server, and each OpenCode server instance spawns the whole local fleet) — not by this plugin, whose spawned tree (node → cli.mjs → iii.exe) carries no cmd.exe/conhost at all (verified by live process-tree audits). Diagnostics for a failed launch remain in the plugin log (`warn`) plus `agentmemory doctor`.
