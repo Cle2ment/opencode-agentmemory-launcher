@@ -5,6 +5,7 @@ on:
     branches: [master, main]
     paths:
       - 'README.md'
+  workflow_dispatch:
 
 jobs:
   translate:
@@ -14,6 +15,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Follow the branch tip, not the event sha: a release push may land
+          # while translations run, and the final push must rebase onto it.
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
 
       - name: Translate to Chinese (zh-CN)
         env:
@@ -75,4 +81,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/README.zh.md docs/README.fr.md
           git diff --staged --quiet || git commit -m "docs: auto-translate README to zh/fr [skip ci]"
-          git push
+          # The branch tip may have moved since checkout (release pushes race
+          # translation runs); rebase onto it and retry before giving up.
+          for i in 1 2 3; do
+            if git pull --rebase origin "${{ github.ref_name }}" && git push; then
+              exit 0
+            fi
+            echo "push attempt $i rejected; rebasing and retrying in 5s"
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          echo "failed to push translations after 3 attempts"
+          exit 1
