@@ -104,11 +104,10 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 
 1. **On load** (`setup()`): the plugin starts a health-check interval (60s)
 2. **Health check**: Pings `GET /agentmemory/livez` on the backend (always public, no auth — even with agentmemory 0.9.30's auth-by-default)
-3. **Auto-restart (two-mode)**: If the health check fails, the backend is launched.
-   - **Startup** (backend down when the plugin loads): opens a visible Windows Terminal tab titled `agentmemory` (`wt -w 0 nt --title agentmemory --suppressApplicationTitle node <cli>`) — Windows Terminal launches `node` itself, so no cmd/pwsh shell is involved. The backend coming up is visible; focus is taken once here — acceptable at startup, and never on the recovery path. Falls back to the silent path when `wt.exe` is unavailable.
-   - **Recovery** (every later (re)launch from the 60s loop): fully silent. On Windows the plugin bypasses npx/cmd entirely — it resolves the **newest** `dist/cli.mjs` it can find in the npm/npx cache or a global install on `PATH`, and spawns `node` directly on it, so the process tree (node → cli.mjs → iii.exe) never touches cmd.exe and never allocates a console: no window/tab and no focus steal, mid-session or while idle (plain `windowsHide` is insufficient because every cmd.exe hop lets a grandchild allocate a new console). Falls back to an npx spawn when no local copy is found. Relaunches are throttled by a 90s boot grace window plus a cross-instance launch lock (multiple OpenCode servers share one backend)
+3. **Auto-restart**: If the health check fails, the backend is launched.
+   - **Always silent** (startup and every later (re)launch from the 60s loop): on Windows the plugin bypasses npx/cmd entirely — it resolves the **newest** `dist/cli.mjs` it can find in the npm/npx cache or a global install on `PATH`, and spawns `node` directly on it, so the process tree (node → cli.mjs → iii.exe) never touches cmd.exe and never allocates a console: no window/tab and no focus steal, at startup, mid-session or while idle (plain `windowsHide` is insufficient because every cmd.exe hop lets a grandchild allocate a new console). Falls back to an npx spawn when no local copy is found. Relaunches are throttled by a 90s boot grace window plus a cross-instance launch lock (multiple OpenCode servers share one backend); a startup launch does not count toward the failure backoff, so a failed startup is retried ~90s later
 4. **Debug mode**: Set `OPENCODE_AGENTMEMORY_DEBUG=1` for verbose logging
-5. **Failure diagnostics**: A backend launch that exits with a non-zero code is logged at `warn` with the likely causes — a daemon already answering on the port (agentmemory 0.9.30 refuses to start a second instance) or the enforced iii-engine pin mismatch. A visible startup tab whose process exits with a non-zero code stays open (Windows Terminal's `closeOnExit: graceful`) so the error text remains readable
+5. **Failure diagnostics**: A backend launch that exits with a non-zero code is logged at `warn` with the likely causes — a daemon already answering on the port (agentmemory 0.9.30 refuses to start a second instance) or the enforced iii-engine pin mismatch. The backend runs with `stdio: "ignore"`, so for the actual error text run `npx @agentmemory/agentmemory doctor`
 
 ## Environment Variables
 
@@ -126,7 +125,7 @@ Two common causes: agentmemory 0.9.30 enforces its iii-engine pin (v0.22.1), so 
 npx @agentmemory/agentmemory doctor
 ```
 
-**A visible startup tab shows `agentmemory worker did not become ready within 15s` and exits with code 1.**
+**The launcher log shows `agentmemory worker did not become ready within 15s` and the launch exits with code 1.**
 A stale instance from an earlier session is still holding the REST port, so the fresh CLI starts its engine but its worker registration never becomes ready — a healthy fresh start completes in ~2s. Diagnose and restart the whole chain (never kill a single worker process: it may be the active route handler, and killing it makes `/agentmemory/livez` return 404):
 
 ```powershell

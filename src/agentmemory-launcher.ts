@@ -9,18 +9,18 @@ import { delimiter, join } from "node:path";
 // Uses /agentmemory/livez (always public, no auth) for health checks.
 // Health-checks every 60s and restarts the backend if it is down.
 //
-// Windows launch is two-mode:
-//  • startup  — the backend is down when the plugin loads, so open a visible
-//    Windows Terminal tab titled "agentmemory" for it. Taking focus once at
-//    startup is acceptable: the user sees the backend come up.
-//  • recovery — every later (re)launch from the 60s supervision loop must be
-//    invisible. `windowsHide` alone is NOT enough there: it only suppresses
-//    the direct child, and every hop through cmd.exe (npx's shim,
-//    `shell: true`) lets a grandchild allocate a NEW console, which Windows
-//    Terminal surfaces as a focus-stealing tab. So recovery bypasses npx/cmd
-//    and spawns `node` directly on the resolved CLI entry; the tree
-//    (node → cli.mjs → iii.exe) never touches cmd.exe and never owns a
-//    console (the CLI spawns iii-engine with `windowsHide` itself).
+// Windows launch is always silent — no window, no tab, no focus steal, at
+// startup and on recovery alike. `windowsHide` alone is NOT enough: it only
+// suppresses the direct child, and every hop through cmd.exe (npx's shim,
+// `shell: true`) lets a grandchild allocate a NEW console, which Windows
+// Terminal surfaces as a focus-stealing window. So every launch bypasses
+// npx/cmd and spawns `node` directly on the resolved CLI entry; the tree
+// (node → cli.mjs → iii.exe) never touches cmd.exe and never owns a console
+// (the CLI spawns iii-engine with `windowsHide` itself). Live process-tree
+// audits confirm the spawned backend carries no cmd.exe/conhost at all,
+// while OpenCode's own local-MCP spawns (`cmd.exe /d /s /c npx …`) each
+// allocate a console — console flashes at OpenCode startup come from those
+// MCP spawns, not from this plugin.
 //
 // OpenCode V2 plugin: the host loads the default export `{ id, setup }`.
 // Supervision starts in `setup()` (V2 has no `config` hook) and the returned
@@ -54,11 +54,12 @@ let lastLaunchAt = 0;
 let launchAttempts = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
 
-/** Startup launches open a visible tab; recovery launches are silent. */
+/**
+ * Why a launch is happening. Startup launches (backend down when the plugin
+ * loads) do not count toward the failure backoff, so a failed startup is
+ * retried ~90s later rather than 180s. Both modes spawn identically silent.
+ */
 type LaunchReason = "startup" | "recovery";
-
-/** Title of the visible startup tab (kept stable via --suppressApplicationTitle). */
-const TAB_TITLE = "agentmemory";
 
 type Level = "info" | "warn" | "error" | "debug";
 
@@ -271,27 +272,6 @@ function spawnSilent(cli: string, env: NodeJS.ProcessEnv, label: string): void {
   void log("info", `launching backend silently via ${label}`);
 }
 
-/**
- * Startup launch: open a visible Windows Terminal tab running the backend.
- * No shell is involved — Windows Terminal launches `node` itself, so the
- * visible path is as shell-free as the silent one (no cmd/pwsh hop).
- * Focus is taken once — acceptable at startup, never used on the recovery path.
- * Degrades to the silent launch when wt.exe is unavailable.
- */
-function spawnVisibleTab(cli: string, env: NodeJS.ProcessEnv, label: string): void {
-  const child = spawn(
-    "wt.exe",
-    ["-w", "0", "nt", "--title", TAB_TITLE, "--suppressApplicationTitle", "node", cli],
-    { detached: true, stdio: "ignore", windowsHide: true, env },
-  );
-  child.on("error", (err) => {
-    void log("warn", `visible tab spawn failed (${err.message}); falling back to a silent launch`);
-    spawnSilent(cli, env, label);
-  });
-  watch(child, `visible tab → ${label}`);
-  void log("info", `launching backend in a visible tab via ${label}`);
-}
-
 function launch(reason: LaunchReason): void {
   const now = Date.now();
   // Exponential backoff across consecutive FAILED attempts (90s, 180s, …,
@@ -310,12 +290,7 @@ function launch(reason: LaunchReason): void {
   const resolved = process.platform === "win32" ? resolveCli() : null;
 
   if (resolved) {
-    const label = `${resolved.version} (${resolved.path})`;
-    if (process.platform === "win32" && reason === "startup") {
-      spawnVisibleTab(resolved.path, env, label);
-    } else {
-      spawnSilent(resolved.path, env, label);
-    }
+    spawnSilent(resolved.path, env, `${resolved.version} (${resolved.path})`);
     return;
   }
 
