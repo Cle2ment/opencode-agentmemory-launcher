@@ -34,6 +34,22 @@ export function makeLaunchProbe() {
   };
 }
 
+/**
+ * Whether this Node supports the mock-timers API these tests need. Node 18
+ * ships an incompatible experimental implementation (different enable()
+ * signature), so feature-test instead of checking availability.
+ */
+export function mockTimersUsable(t) {
+  if (typeof t.mock?.timers?.enable !== "function") return false;
+  try {
+    t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+    t.mock.timers.reset();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function readLaunches(logFile) {
   try {
     return fs.readFileSync(logFile, "utf-8").split("\n").filter(Boolean);

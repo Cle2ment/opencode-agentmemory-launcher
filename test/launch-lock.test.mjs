@@ -13,6 +13,7 @@ import {
   loadPlugin,
   makeRoot,
   makeLaunchProbe,
+  mockTimersUsable,
   pumpUntilLaunches,
   startBackendDownServer,
 } from "./helpers.mjs";
@@ -24,8 +25,9 @@ let fixtures;
 let lockPath;
 let probe;
 
-// t.mock.timers requires Node >= 20.2 (unavailable on the Node 18 CI leg).
-const hasMockTimers = (t) => typeof t.mock?.timers?.enable === "function";
+// Node 18 ships an incompatible experimental mock-timers implementation; the
+// guard feature-tests the real API instead of checking availability.
+const hasMockTimers = (t) => mockTimersUsable(t);
 
 function seedLock(ageMs) {
   fs.writeFileSync(lockPath, "12345");

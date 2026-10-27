@@ -16,6 +16,7 @@ import {
   loadPlugin,
   makeRoot,
   makeLaunchProbe,
+  mockTimersUsable,
   startBackendDownServer,
 } from "./helpers.mjs";
 
@@ -25,7 +26,9 @@ let closeServer;
 let fixtures;
 let probe;
 
-const hasMockTimers = (t) => typeof t.mock?.timers?.enable === "function";
+// Node 18 ships an incompatible experimental mock-timers implementation; the
+// guard feature-tests the real API instead of checking availability.
+const hasMockTimers = (t) => mockTimersUsable(t);
 
 before(async () => {
   root = makeRoot("backoff");
