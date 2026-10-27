@@ -5,6 +5,21 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.1] - 2026-10-27
+
+### Fixed
+- **Windows/Scoop: a newer global install behind a symlinked PATH entry is no longer shadowed by a stale npx-cache copy.** The OpenCode server PATH can contain scoop's shim dir (`apps/nodejs/current/bin`) while the real global packages live at the entry's realpath (`persist/nodejs/bin`). The PATH scan now resolves each entry with `realpath` and scans both (deduped), still picking the highest version — so `npm i -g @agentmemory/agentmemory@0.9.31` actually wins over a cached 0.9.30.
+
+### Changed
+- **Launch boot budget raised 90s → 450s for agentmemory 0.9.31.** The 0.9.31 runtime (iii 0.25.0, Worker Compose) budgets up to 120s for the engine plus 300s for worker readiness; the cross-instance lock staleness and the minimum retry delay now cover that window (420s + 30s margin), so a normal 0.9.31 boot is no longer relaunched mid-flight. The exponential backoff keeps its 90s base: the effective delay is `max(450s, 90s·2^attempts capped at 12min)` — 450s for the first attempts, 720s from the 4th — instead of jumping straight to 450/900/1800s from a 450s base.
+- **Launch-failure diagnostics no longer hardcode the iii-engine version** (the 0.22.1 pin reference was stale). The warn now names both remaining likely causes — a daemon already answering on the port and an enforced iii-engine *version* pin mismatch — plus, for 0.9.31+, a Worker Compose worker-readiness failure (native Windows is unverified upstream, see `rohitg00/agentmemory#1618`), and notes that a healthy 0.9.31 boot can take ~7 min without `/livez`, so only a non-zero CLI exit is a failure.
+
+### Added
+- **Regression test suite** (`npm test`, node:test against the built plugin): realpath PATH resolution on the Scoop shim layout, the 450s launch-lock budget, and the `max(450s, 90s·2^n)` retry-delay grid (via mock timers). Previously `npm test` was a placeholder.
+
+### Notes
+- Verified against the real published **agentmemory 0.9.31** package layout (`bin: { "agentmemory": "dist/cli.mjs" }`) in the Scoop realpath global-install layout. Full native-Windows startup of 0.9.31 remains blocked upstream by `rohitg00/agentmemory#1618` — the launcher side (resolution, silent spawn, boot budget, diagnostics) is ready for it.
+
 ## [4.3.0] - 2026-10-25
 
 ### Changed
@@ -107,6 +122,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Debug logging via `OPENCODE_AGENTMEMORY_DEBUG` env var
 - Configurable backend URL via `AGENTMEMORY_URL` env var
 
+[4.3.1]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.3.0...v4.3.1
+[4.3.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.2.1...v4.3.0
+[4.2.1]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.2.0...v4.2.1
+[4.2.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.1.2...v4.2.0
+[4.1.2]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.1.1...v4.1.2
+[4.1.1]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.1.0...v4.1.1
+[4.1.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v3.0.0...v4.0.0
 [2.0.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v1.0.2...v2.0.0
 [1.0.2]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v1.0.1...v1.0.2
