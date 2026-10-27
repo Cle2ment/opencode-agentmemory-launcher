@@ -2,52 +2,67 @@
 
 ## Overview
 
-Single-file OpenCode V2 (`opencode2`) plugin that auto-starts the agentmemory backend on load with 60s health-check supervision. V1 support was dropped in v4.0.0.
+Three-module OpenCode V2 (`opencode2`) plugin that auto-starts the agentmemory backend on load with 60s health-check supervision. V1 support was dropped in v4.0.0.
 
 ## Architecture
 
 ```
-src/agentmemory-launcher.ts   # Plugin entry (V2 module)
+src/agentmemory-launcher.ts   # V2 entry: default { id, setup } and cleanup
+src/launch.ts                 # Health checks, spawn, launch lock/backoff, supervision singleton
+src/cli-resolution.ts         # npx/global CLI discovery, realpath handling, version selection
 ```
 
-Flow: on plugin load (`setup()`) → `GET /agentmemory/livez` (2s timeout) → spawns `npx @agentmemory/agentmemory` if down → 60s supervision loop → cleanup function stops the loop on unload.
+Dependency direction is strictly `agentmemory-launcher.ts → launch.ts → cli-resolution.ts`; there are no cycles. The entrypoint filename and default export are the public package contract. Internal named exports are not part of that contract.
 
-Windows launch path (always silent): every launch — startup and 60s-supervision recovery alike — bypasses npx/cmd and spawns `node` directly on `dist/cli.mjs` resolved from the **newest** agentmemory it can find (the npm/npx cache discovered via `npm_config_cache` → `~/.npmrc` `cache=` → `%LOCALAPPDATA%/npm-cache`, plus a `../cache/_npx` probe beside each PATH entry for portable installs like scoop, or a global install on `PATH` at `<dir>/node_modules/@agentmemory/agentmemory` / `<prefix>/lib/node_modules/@agentmemory/agentmemory`, highest version wins). The tree (node → cli.mjs → iii.exe) contains no cmd.exe and never allocates a console (the CLI spawns iii-engine with `windowsHide` itself; live process-tree audits show no cmd.exe/conhost under the spawned backend). Falls back to the legacy npx spawn only when no candidate is found or the direct spawn errors. Plain `windowsHide` is not enough for the npx path: it hides only the direct child, and every cmd.exe hop — `shell: true`, npx's `.cmd` shim — lets a grandchild allocate a NEW console, which Windows Terminal shows as a focus-stealing window. Relaunches are gated by a 90s boot grace window plus a cross-instance self-expiring lock (`%TEMP%/agentmemory-launcher.lock`) because every OpenCode server runs its own plugin instance against the same backend.
+Flow: on plugin load (`setup()`) → `GET /agentmemory/livez` (2s timeout, one 3s confirmation retry) → resolve and silently spawn the newest CLI if down → 60s supervision loop → cleanup stops the loop on unload.
+
+Windows launch path (the launcher's own spawn is always silent): every launch bypasses npx/cmd and spawns `node` directly on `dist/cli.mjs` resolved from the **newest** agentmemory it can find. Candidates come from the npm/npx cache (`npm_config_cache` → `~/.npmrc` `cache=` → `%LOCALAPPDATA%/npm-cache`, plus portable cache probes beside PATH entries) and global installs on `PATH`. Both literal PATH entries and their `realpath` values are scanned, which is required for Scoop's `apps/nodejs/current/bin` → `persist/nodejs/bin` layout. Highest version wins. Fall back to the legacy npx spawn only when no candidate is found or the direct spawn errors. Plain `windowsHide` is insufficient for the npx path because every cmd.exe hop can allocate a new console.
+
+Relaunches use a 450s boot budget plus a cross-instance self-expiring lock (`%TEMP%/agentmemory-launcher.lock`). The retry delay is `max(450s, 90s·2^attempts capped at 12min)`, so normal 0.9.31 startup is not interrupted by a duplicate launch. agentmemory 0.9.31+ Worker Compose may create cmd.exe/conhost inside its own worker tree; do not attribute every console flash to the launcher without a parent-process trace.
 
 ## Agentmemory Backend (Critical Knowledge)
 
 Source: [rohitg00/agentmemory](https://github.com/rohitg00/agentmemory)
 
-### Two-Tier Startup
+### 0.9.31+ Worker Compose Startup
+
 ```
-npx @agentmemory/agentmemory  (CLI + worker, ~15-30s startup)
-  └─ iii-engine  (binary, detached, PID in ~/.agentmemory/iii.pid)
-       └─ iii-exec → worker  (registers API routes, binds port)
+node dist/cli.mjs             # short-lived launcher; exits after readiness
+  └─ iii compose              # detached service owner
+       ├─ iii-engine 0.25.0
+       ├─ state / http workers
+       └─ agentmemory worker (dist/index.mjs)
 ```
 
+The CLI budgets up to 120s for engine readiness plus 300s for worker readiness. A healthy boot can therefore take about 7 minutes without `/livez`; the launcher must not use the old 90s grace window. `/livez`, not CLI process lifetime, remains the health signal.
+
+Legacy 0.9.30 used the older CLI + engine + worker model with a 15s worker readiness error and iii-engine 0.22.1. Keep that version distinction when diagnosing old log messages.
+
 ### Health Endpoints (CRITICAL)
+
 | Endpoint | Auth | Use |
 |----------|------|-----|
 | `GET /agentmemory/livez` | **public, no auth** | Use for liveness checks |
 | `GET /agentmemory/health` | **requires auth** (always, since 0.9.30) | Full health snapshot, 200/503 |
-| `GET /agentmemory/status` | **requires auth** (added 0.9.30) | Rich self-diagnosis (providers, engine pin, ports, flags); JSON or HTML |
+| `GET /agentmemory/status` | **requires auth** (added 0.9.30) | Rich self-diagnosis; JSON or HTML |
 
 > DO NOT switch back to `/health` — since agentmemory 0.9.30 a secret is always generated (`~/.agentmemory/secret`), so `/health` **always** returns 401 without a bearer, causing infinite restart loops.
 
 ### Known Pitfalls
-- **StateKV timeout**: after 12-24h uptime, `state::set` may timeout → `/health` returns 503. `/livez` unaffected.
-- **npx cache vs global install**: `npx @agentmemory/agentmemory` may serve a stale cached version, and a newer `npm i -g` install is a separate copy. The launcher resolves the **newest** version across the npx cache and `PATH` globals (a newer global install now wins over a stale cache); clear the cache with `npx clear-npx-cache` when needed.
-- **Engine version pin**: agentmemory **0.9.30** pins iii-engine to **v0.22.1** (0.11.2 through 0.9.29) and enforces the pin (`process.exit(1)` on mismatch). The pinned engine auto-installs into `~/.agentmemory/bin/` and is SHA-256 verified. Custom iii configs must keep the `iii-`-prefixed builtin worker names (`iii-http`, `iii-state`, `iii-queue`, `iii-pubsub`, `iii-cron`) — on 0.22.1 the bare names resolve to standalone registry workers.
-- **Auth on by default (0.9.30)**: the daemon generates `~/.agentmemory/secret` (mode 0600) on first start when `AGENTMEMORY_SECRET` is unset. The bundled CLI/viewer/hooks/MCP read it automatically; only hand-written REST calls to `:3111` need `Authorization: Bearer $(cat ~/.agentmemory/secret)`. The launcher only calls the public `/agentmemory/livez`, so it needs no secret.
-- **Silent launch failure on engine-pin mismatch**: the launcher spawns the backend with `stdio: "ignore"`; 0.9.30's enforced engine pin makes a mismatched engine `exit(1)` with no visible output. The plugin logs a `warn` on any non-zero launch exit pointing at the pin.
-- **Windows**: no binary auto-download; Docker fallback needed.
-- **Windows focus-stealing tabs**: any cmd.exe hop in the spawn chain (`shell: true`, npx `.cmd` shim) lets a grandchild allocate a new console → visible WT window/tab. `windowsHide`/`detached` do not propagate down the tree. Hence the two-mode launch: the startup tab is deliberate (visible, one focus grab), recovery spawns `node` directly on `cli.mjs` and stays invisible. A WT tab whose process exits non-zero stays open (`closeOnExit: graceful`), so a failed startup launch leaves its error text on screen. The same console-allocation mechanism applies to `@agentmemory/mcp` stdio servers spawned by OpenCode per session — those flashes come from OpenCode's MCP spawn, not this plugin.
-- **winnat port theft (os error 10013)**: iii-engine can suddenly fail to bind its port with `failed to bind ... 10013` while nothing listens there — the port fell into a winnat/Hyper-V dynamic excluded range (check `netsh interface ipv4 show excludedportrange protocol=tcp`). Durable fix (admin): `net stop winnat` → `netsh int ipv4 add excludedportrange protocol=tcp startport=3111 numberofports=3` → `net start winnat`. Symptom cascade: every plugin instance relaunches every 60s, racer CLIs keep killing each other's engines, backend stays down.
-- **Stale worker holding the port (`agentmemory worker did not become ready within 15s`, CLI exit 1)**: if a worker process survives its engine (orphaned `cli.mjs` node), a fresh CLI starts its own engine fine but the new worker's registration never becomes ready → exit 1 after 15s, leaving an orphan engine behind. A healthy fresh start reaches ready in ~2s (engine ~1.0s, worker registered ~1.5s), so this error indicates port/route contention, not slowness. Diagnose with `Get-NetTCPConnection -LocalPort 3111 -State Listen` plus a `cli.mjs`/`iii.exe` sweep (a manually-restored instance launched from a shell shows a `bash`/`sh` parent). **Remedy: restart the whole chain (`npx @agentmemory/agentmemory stop`, or stop the engine+worker pair together) — never kill a single worker in isolation: the engine may have bound its routes to that very process, and killing it makes `/agentmemory/livez` return 404 while the engine keeps holding the port.**
+
+- **StateKV timeout**: after 12-24h uptime, `state::set` may timeout → `/health` returns 503. `/livez` is unaffected.
+- **npx cache vs global install**: these are separate copies. The launcher resolves the newest across both, including globals reachable only through a symlinked PATH entry's `realpath`; clear stale caches with `npx clear-npx-cache` when needed.
+- **Engine version pin**: 0.9.30 pins iii-engine 0.22.1; 0.9.31 pins 0.25.0 and enforces the pin. Native Windows requires manually installing the pinned `iii.exe`; the CLI manages engine selection, not this launcher. Legacy custom iii configs and `AGENTMEMORY_USE_DOCKER` do not apply to 0.9.31 Worker Compose.
+- **Auth on by default (0.9.30+)**: the daemon generates `~/.agentmemory/secret` (mode 0600) when `AGENTMEMORY_SECRET` is unset. Bundled clients read it automatically; hand-written REST calls need `Authorization: Bearer $(cat ~/.agentmemory/secret)`. The launcher only calls public `/livez`.
+- **Silent launch failure**: backend stdio is ignored. Any non-zero CLI exit logs a `warn` covering port contention, engine-pin mismatch, and 0.9.31+ Worker Compose readiness failure; use `agentmemory doctor` for details.
+- **Native Windows 0.9.31 startup regression**: [agentmemory#1618](https://github.com/rohitg00/agentmemory/issues/1618) documents Worker Compose shell quoting and environment/PATH problems that prevent workers from registering. Native Windows is unverified upstream. Do not hide this by patching third-party `dist` files in this repository.
+- **Windows focus-stealing tabs**: cmd.exe hops in npx/OpenCode local-MCP spawn chains can allocate consoles. The launcher has no deliberate visible-startup mode. For 0.9.31+, distinguish the launcher's silent direct spawn from consoles created inside Worker Compose or by OpenCode MCP spawns using process-parent evidence.
+- **winnat port theft (os error 10013)**: check `netsh interface ipv4 show excludedportrange protocol=tcp`. Durable fix (admin): `net stop winnat` → `netsh int ipv4 add excludedportrange protocol=tcp startport=3111 numberofports=3` → `net start winnat`.
+- **Legacy 0.9.30 stale worker (`worker did not become ready within 15s`)**: restart the whole chain with `agentmemory stop` or stop the engine+worker pair together. Never kill a single worker in isolation; its engine may have bound routes to that process, causing `/livez` to return 404 while the port remains held.
 
 ## OpenCode V2 Plugin API
 
-SDK: `@opencode/plugin` (stable, >=2.0.18 — GA, not beta). Types are imported type-only (`import type { Plugin } from "@opencode/plugin"`), so the SDK is a **devDependency** with zero runtime footprint; the V2 host decodes the shape at runtime.
+SDK: `@opencode/plugin` (stable, >=2.0.18). Types are imported type-only (`import type { Plugin } from "@opencode/plugin"`), so the SDK is a **devDependency** with zero runtime footprint; the V2 host decodes the shape at runtime.
 
 | Aspect | V2 behavior |
 |---|---|
@@ -55,26 +70,28 @@ SDK: `@opencode/plugin` (stable, >=2.0.18 — GA, not beta). Types are imported 
 | Entrypoint resolution | bare package name → `exports["."]`; Node path uses `require.resolve` → **`exports["."]` must carry a `default` condition**, not only `import` |
 | Config key | `"plugins": [...]` (plural), `Array<string \| { package, options }>` |
 | Cleanup | function returned from `setup()`, called on plugin unload (e.g. config hot-reload) |
-| Logging | **no `client.app.log` in V2** (`ctx.app` is metadata only) → stderr (`consoleLog`): warn/error always, info/debug only with `OPENCODE_AGENTMEMORY_DEBUG=1` |
+| Logging | **no `client.app.log` in V2** → stderr: warn/error always, info/debug only with `OPENCODE_AGENTMEMORY_DEBUG=1` |
 
 - **No `config` hook in V2** → supervision starts in `setup()` (runs once on load).
-- **`timer.unref()`**: health-check interval never blocks Node exit.
-- Module-level `timer` singleton makes repeated `setup()` (hot-reload) safe: `startSupervision` is idempotent.
-- Docs: [build/plugins](https://opencode.ai/v2/docs/build/plugins) · loader source `packages/core/src/config/plugin/external.ts` (schema union `id+effect | id+setup`).
+- **`timer.unref()`**: the health-check interval never blocks Node exit.
+- The module-level `timer` singleton lives in `launch.ts`; the entry only calls its start/stop functions, and `startSupervision` remains idempotent.
+- Docs: [build/plugins](https://opencode.ai/v2/docs/build/plugins) · loader source `packages/core/src/config/plugin/external.ts`.
 
 ## Conventions
 
-- TypeScript strict — no `any`, no `@ts-ignore`
-- Exports: default `{ id, setup }` only (V2)
-- Stateless — process supervision via `child.unref()`; the only file I/O is the cross-instance launch lock in `%TEMP%` on Windows
-- Runtime dependencies: none (`@opencode/plugin` is type-only devDependency)
+- TypeScript strict — no `any`, no `@ts-ignore`.
+- Public exports: default `{ id, setup }` only (V2); submodule named exports are internal.
+- Process supervision uses `child.unref()`; the only persistent launcher file write is the cross-instance launch lock in `%TEMP%` on Windows.
+- Runtime dependencies: none (`@opencode/plugin` is a type-only devDependency).
 
 ## CI/CD
 
 | Workflow | Trigger | Action |
 |----------|---------|--------|
 | `ci.yml` | push/PR to `master`/`main` (skip: `**/*.md`, `LICENSE`, `.github/**`) | typecheck → build → test (Node 18/20/22) |
-| `cd.yml` | push `v*` tag | typecheck → build → `npm publish --provenance` → GitHub Release (`src/agentmemory-launcher.ts`) |
+| `cd.yml` | push `v*` tag | typecheck → build → `npm publish --provenance` → GitHub Release notes |
+
+The npm package distributes the compiled multi-file `dist/` output. GitHub Releases no longer attach a standalone raw `.ts` plugin for manual installation.
 
 Release: `npm version patch && git push --follow-tags`
 
@@ -93,8 +110,8 @@ Release: `npm version patch && git push --follow-tags`
 ```bash
 npm install         # first time only
 npm run typecheck   # verify types
-npm run build       # compile to dist/
-npm test            # (placeholder, exits 0)
+npm run build       # compile all three modules to dist/
+npm test            # build + node:test regression suite
 ```
 
 Test locally: point OpenCode plugin config at this package.

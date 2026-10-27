@@ -12,7 +12,7 @@
 ## Prérequis
 
 - **OpenCode V2** (`opencode2`)
-- **Node.js** ≥ 18.0.0 pour le plugin lui-même ; le backend agentmemory 0.9.30 nécessite **Node.js ≥ 20.0.0**
+- **Node.js** ≥ 18.0.0 pour le plugin lui-même ; agentmemory 0.9.30+ nécessite **Node.js ≥ 20.0.0**
 - backend **agentmemory** (auto-installé via `npx @agentmemory/agentmemory` s'il n'est pas présent)
 
 > **Utilisateurs V1 :** OpenCode V1 (`opencode` 1.x) n'est plus pris en charge depuis la v4.0.0 — épinglez `opencode-agentmemory-launcher@^3` si vous avez encore besoin de V1.
@@ -25,11 +25,12 @@ Ce plugin démarre automatiquement le backend [agentmemory](https://github.com/r
 
 ## Compatibilité
 
-Conçu pour **agentmemory 0.9.30** (2026-10-06) et rétrocompatible avec les versions antérieures :
+Conçu pour **agentmemory 0.9.31** (iii-engine 0.25.0, Worker Compose) et rétrocompatible avec les versions antérieures :
 
 - **L'authentification est activée par défaut.** agentmemory génère un secret dans `~/.agentmemory/secret` au premier démarrage. Le lanceur n'appelle que le point de terminaison toujours public `/agentmemory/livez`, il n'a donc pas besoin de secret et n'est pas affecté. Les appels REST écrits à la main vers `:3111` nécessitent désormais `Authorization: Bearer $(cat ~/.agentmemory/secret)`.
-- **iii-engine 0.22.1.** agentmemory 0.9.30 a fait passer son épinglage de moteur de `0.11.2` à `0.22.1` et l'impose. Le lanceur ne gère pas le moteur (c'est la CLI agentmemory qui le fait), mais un épinglage incompatible fait désormais quitter la CLI avec le code 1 — le lanceur le remonte sous forme de `warn`.
-- **La version la plus récente l'emporte.** Sous Windows, le lanceur démarre l'agentmemory le plus récent qu'il peut trouver dans le cache npx **ou une installation globale sur `PATH`**, de sorte que `npm i -g @agentmemory/agentmemory@latest` prend effet sans vider le cache npx.
+- **Attente de disponibilité Worker Compose.** agentmemory 0.9.31 budgète jusqu'à 120 s pour le démarrage du moteur plus 300 s pour la disponibilité du worker. Le budget de démarrage de 450 s du lanceur et le verrou de lancement inter-instances empêchent les lancements en double pendant cette fenêtre.
+- **Les épinglages de moteur sont gérés par agentmemory.** Le lanceur n'installe ni ne sélectionne iii-engine. Un épinglage incompatible fait quitter la CLI avec le code 1 et est remonté sous forme de `warn`. Sous Windows natif, il faut installer manuellement le moteur épinglé ; la version 0.9.31 connaît également un problème de démarrage Worker Compose sous Windows natif suivi dans [agentmemory#1618](https://github.com/rohitg00/agentmemory/issues/1618).
+- **La version la plus récente l'emporte.** Sous Windows, le lanceur démarre l'agentmemory le plus récent qu'il peut trouver dans le cache npx **ou une installation globale sur `PATH`**, y compris les installations globales derrière des entrées PATH Scoop symboliquement liées, de sorte que `npm i -g @agentmemory/agentmemory@latest` prend effet sans vider le cache npx.
 
 ## Installation
 
@@ -44,29 +45,6 @@ Ajoutez à votre configuration OpenCode (`plugins`, au pluriel) :
 ```
 
 OpenCode installera automatiquement le package au démarrage. Consultez le [guide des plugins V2](https://opencode.ai/v2/docs/build/plugins) pour plus de détails.
-
-### Depuis un fichier local
-
-Placez le fichier du plugin dans `.opencode/plugins/` :
-
-```
-.opencode/plugins/
-└── agentmemory-launcher.ts
-```
-
-Les fichiers de ce répertoire sont automatiquement chargés au démarrage.
-
-### Installation manuelle (depuis les GitHub Releases)
-
-1. Téléchargez `agentmemory-launcher.ts` depuis la dernière [GitHub Release](https://github.com/Cle2ment/opencode-agentmemory-launcher/releases)
-2. Placez-le dans `.opencode/plugins/` :
-
-```
-.opencode/plugins/
-└── agentmemory-launcher.ts
-```
-
-OpenCode charge les fichiers `.ts` de `.opencode/plugins/` automatiquement au démarrage.
 
 ## Utilisation
 
@@ -105,9 +83,9 @@ Redémarrez OpenCode pour relancer agentmemory avec la version mise à jour.
 1. **Au chargement** (`setup()`) : le plugin démarre un intervalle de health-check (60 s)
 2. **Health check** : Ping `GET /agentmemory/livez` sur le backend (toujours public, sans authentification — même avec l'authentification par défaut d'agentmemory 0.9.30)
 3. **Redémarrage automatique** : Si le health check échoue, le backend est lancé.
-   - **Toujours silencieux** (au démarrage et à chaque (re)lancement ultérieur depuis la boucle de 60 s) : sous Windows, le plugin contourne entièrement npx/cmd — il résout le `dist/cli.mjs` **le plus récent** qu'il peut trouver dans le cache npm/npx ou une installation globale sur `PATH`, et lance `node` directement dessus, de sorte que l'arborescence des processus (node → cli.mjs → iii.exe) ne touche jamais cmd.exe et n'alloue jamais de console : aucune fenêtre/onglet et aucun vol de focus, au démarrage, en cours de session ou au repos (le simple `windowsHide` est insuffisant car chaque saut par cmd.exe permet à un petit-enfant d'allouer une nouvelle console). Retour à un spawn npx lorsqu'aucune copie locale n'est trouvée. Les relances sont limitées par une fenêtre de grâce de démarrage de 90 s plus un verrou de lancement inter-instances (plusieurs serveurs OpenCode partagent un seul backend) ; un lancement au démarrage ne compte pas dans le backoff d'échec, donc un démarrage échoué est réessayé ~90 s plus tard
+   - **Toujours silencieux sur le propre chemin de spawn du lanceur** (au démarrage et à chaque (re)lancement ultérieur depuis la boucle de 60 s) : sous Windows, le plugin contourne npx/cmd, résout le `dist/cli.mjs` **le plus récent** dans le cache npm/npx ou une installation globale sur `PATH`, et lance `node` directement dessus. Le Worker Compose d'agentmemory 0.9.31+ peut créer cmd.exe/conhost dans son propre arbre de workers ; le démarrage sous Windows natif est actuellement affecté par [agentmemory#1618](https://github.com/rohitg00/agentmemory/issues/1618). Les relances sont limitées par un budget de démarrage de 450 s plus un verrou de lancement inter-instances (plusieurs serveurs OpenCode partagent un seul backend). Le backoff exponentiel conserve sa base de 90 s, produisant 450 s → 450 s → 450 s → 720 s … jusqu'à 12 min
 4. **Mode debug** : Définissez `OPENCODE_AGENTMEMORY_DEBUG=1` pour une journalisation détaillée
-5. **Diagnostics d'échec** : Un lancement de backend qui se termine avec un code non nul est journalisé en `warn` avec les causes probables — un daemon répondant déjà sur le port (agentmemory 0.9.30 refuse de démarrer une seconde instance) ou l'incompatibilité d'épinglage iii-engine imposée. Le backend s'exécute avec `stdio: "ignore"`, donc pour obtenir le texte d'erreur réel, exécutez `npx @agentmemory/agentmemory doctor`
+5. **Diagnostics d'échec** : Un lancement de backend qui se termine avec un code non nul est journalisé en `warn` avec les causes probables — un daemon répondant déjà sur le port, l'incompatibilité d'épinglage iii-engine imposée, ou un échec de disponibilité du Worker Compose 0.9.31+. Le backend s'exécute avec `stdio: "ignore"`, donc pour obtenir le texte d'erreur réel, exécutez `npx @agentmemory/agentmemory doctor`
 
 ## Variables d'environnement
 
@@ -119,13 +97,13 @@ Redémarrez OpenCode pour relancer agentmemory avec la version mise à jour.
 ## Dépannage
 
 **Le backend ne démarre jamais et le journal affiche une sortie de lancement non nulle.**
-Deux causes courantes : agentmemory 0.9.30 impose son épinglage iii-engine (v0.22.1), donc un moteur différent sur `PATH` fait quitter la CLI avec le code 1 ; ou une instance obsolète possède encore le port. Exécutez-le manuellement pour voir l'erreur réelle :
+Les causes courantes sont une incompatibilité d'épinglage iii-engine imposée, une instance obsolète possédant encore le port, ou un worker Worker Compose 0.9.31+ qui ne devient pas prêt. Sous Windows natif, consultez [agentmemory#1618](https://github.com/rohitg00/agentmemory/issues/1618) pour le problème de démarrage 0.9.31 connu. Exécutez le doctor manuellement pour voir l'erreur réelle :
 
 ```bash
 npx @agentmemory/agentmemory doctor
 ```
 
-**Le journal du lanceur affiche `agentmemory worker did not become ready within 15s` et le lancement se termine avec le code 1.**
+**Sous agentmemory 0.9.30, le journal du lanceur affiche `agentmemory worker did not become ready within 15s` et le lancement se termine avec le code 1.**
 Une instance obsolète d'une session antérieure occupe encore le port REST, donc la nouvelle CLI démarre son moteur mais son enregistrement de worker ne devient jamais prêt — un démarrage sain se termine en ~2 s. Diagnostiquez et redémarrez toute la chaîne (ne tuez jamais un seul processus worker : il peut être le gestionnaire de route actif, et le tuer fait renvoyer 404 à `/agentmemory/livez`) :
 
 ```powershell
@@ -149,7 +127,7 @@ Le plugin cible l'API des plugins OpenCode V2 (`@opencode/plugin` >= 2.0.18). La
 ```typescript
 import type { Plugin } from "@opencode/plugin";
 
-const plugin: Plugin = {
+const plugin: Plugin.Plugin = {
   id: "agentmemory-launcher",
   setup: async (ctx) => {
     // start supervision; return cleanup

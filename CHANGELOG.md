@@ -5,6 +5,15 @@ All notable changes to opencode-agentmemory-launcher will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2026-10-28
+
+### Changed
+- **Refactored the plugin into three internal modules**: the V2 entrypoint, launch/supervision logic, and CLI resolution. The package entrypoint, default export, runtime behavior, and regression-test contract remain unchanged.
+- **Documentation now reflects agentmemory 0.9.31 Worker Compose**, the 450s launch boot budget, realpath-based global discovery, and the native-Windows upstream issue `rohitg00/agentmemory#1618`.
+
+### Removed
+- **Standalone raw `.ts` Release attachment and single-file manual installation.** npm now provides the supported distribution path using the compiled multi-file `dist/` output; GitHub Releases contain release notes only.
+
 ## [4.3.1] - 2026-10-27
 
 ### Fixed
@@ -122,6 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Debug logging via `OPENCODE_AGENTMEMORY_DEBUG` env var
 - Configurable backend URL via `AGENTMEMORY_URL` env var
 
+[4.4.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.3.1...v4.4.0
 [4.3.1]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.2.1...v4.3.0
 [4.2.1]: https://github.com/Cle2ment/opencode-agentmemory-launcher/compare/v4.2.0...v4.2.1
