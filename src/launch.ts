@@ -139,7 +139,10 @@ function watch(child: ChildProcess, label: string): void {
 
 /** Silent launcher spawn: node → cli.mjs without an npx/cmd hop. */
 function spawnSilent(cli: string, env: NodeJS.ProcessEnv, label: string): void {
-  const child = spawn("node", [cli], {
+  // process.execPath (not the bare "node" command): the OpenCode host may run
+  // with a PATH that lacks node's directory or shadows it with a shim, which
+  // would make a PATH lookup ENOENT and fall back to the npx/cmd path.
+  const child = spawn(process.execPath, [cli], {
     detached: true,
     stdio: "ignore",
     windowsHide: true,
@@ -147,7 +150,13 @@ function spawnSilent(cli: string, env: NodeJS.ProcessEnv, label: string): void {
   });
   child.on("error", (err) => {
     void log("warn", `direct node spawn failed (${err.message}); falling back to npx`);
-    watch(spawnDirect(env), "npx spawn (fallback)");
+    const fallback = spawnDirect(env);
+    // The fallback child needs its own error listener: an unhandled "error"
+    // event on a ChildProcess is an uncaught exception (e.g. npx missing).
+    fallback.on("error", (fallbackErr) =>
+      void log("warn", `npx fallback spawn failed: ${fallbackErr.message}`),
+    );
+    watch(fallback, "npx spawn (fallback)");
   });
   watch(child, label);
   void log("info", `launching backend silently via ${label}`);

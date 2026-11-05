@@ -182,11 +182,16 @@ export function buildFixtures(root, { persistVersion = "99.0.0", npxVersion = "0
  * so all three are set to keep the plugin's cross-instance lock inside the
  * fixture root instead of the machine-wide temp dir.
  */
-export function applyFixtureEnv(root, { shimBin, cacheRoot, port }) {
+export function applyFixtureEnv(root, { shimBin, cacheRoot, port, includeNodeOnPath = true } = {}) {
   process.env.TMPDIR = root;
   process.env.TMP = root;
   process.env.TEMP = root;
-  process.env.PATH = [shimBin, path.dirname(process.execPath)].join(path.delimiter);
+  // includeNodeOnPath=false simulates an OpenCode host whose PATH lacks the
+  // node binary's directory: spawn("node", …) would ENOENT there, so the
+  // launcher must spawn process.execPath instead of relying on PATH.
+  process.env.PATH = includeNodeOnPath
+    ? [shimBin, path.dirname(process.execPath)].join(path.delimiter)
+    : shimBin;
   process.env.npm_config_cache = cacheRoot;
   process.env.AGENTMEMORY_URL = `http://127.0.0.1:${port}`;
   process.env.AGENTMEMORY_LAUNCHER_RESOLVE_CLI = "1";

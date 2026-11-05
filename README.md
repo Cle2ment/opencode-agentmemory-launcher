@@ -25,11 +25,13 @@ This plugin automatically starts the [agentmemory](https://github.com/rohitg00/a
 
 ## Compatibility
 
-Built for **agentmemory 0.9.31** (iii-engine 0.25.0, Worker Compose) and backward compatible with earlier releases:
+Built for **agentmemory 0.9.32** (iii-engine 0.25.0, Worker Compose) and backward compatible with earlier releases:
 
 - **Auth is on by default.** agentmemory generates a secret into `~/.agentmemory/secret` on first start. The launcher only calls the always-public `/agentmemory/livez`, so it needs no secret and is unaffected. Hand-written REST calls to `:3111` now need `Authorization: Bearer $(cat ~/.agentmemory/secret)`.
-- **Worker Compose readiness.** agentmemory 0.9.31 budgets up to 120s for engine startup plus 300s for worker readiness. The launcher's 450s boot budget and cross-instance lock prevent duplicate launches during that window.
-- **Engine pins are managed by agentmemory.** The launcher does not install or select iii-engine. A mismatched pin exits the CLI with code 1 and is surfaced as a `warn`. Native Windows requires a manually installed pinned engine; 0.9.31 also has a known native-Windows Worker Compose startup issue tracked in [agentmemory#1618](https://github.com/rohitg00/agentmemory/issues/1618).
+- **Worker Compose readiness.** agentmemory 0.9.31+ budgets up to 120s for engine startup plus 300s for worker readiness. The launcher's 450s boot budget and cross-instance lock prevent duplicate launches during that window.
+- **Windows startup is non-interactive.** agentmemory 0.9.32 skips interactive engine-setup prompts on Windows and when stdio is not a TTY, and can install its pinned Windows engine automatically. This makes it suitable for the launcher's ignored-stdio background spawn.
+- **Empty console windows remain an upstream issue.** agentmemory 0.9.31 and 0.9.32 both pin iii 0.25.0, whose Windows Worker Compose can open an empty console for the engine and each worker ([iii#2430](https://github.com/iii-hq/iii/issues/2430)). The launcher cannot suppress those grandchild windows with `windowsHide`; the fix is in [iii#2437](https://github.com/iii-hq/iii/pull/2437), but it is not in the stable 0.25.0 engine used by agentmemory 0.9.32. The launcher does not pin an alpha engine or patch third-party files.
+- **Engine pins are managed by agentmemory.** The launcher does not install, select, or override iii-engine. A mismatched pin exits the CLI with code 1 and is surfaced as a `warn`.
 - **Newest version wins.** On Windows the launcher starts the newest agentmemory it can find in the npx cache **or a global install on `PATH`**, including global installs behind symlinked Scoop PATH entries, so `npm i -g @agentmemory/agentmemory@latest` takes effect without clearing the npx cache.
 
 ## Installation
@@ -83,7 +85,7 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 1. **On load** (`setup()`): the plugin starts a health-check interval (60s)
 2. **Health check**: Pings `GET /agentmemory/livez` on the backend (always public, no auth — even with agentmemory 0.9.30's auth-by-default)
 3. **Auto-restart**: If the health check fails, the backend is launched.
-   - **Always silent on the launcher's own spawn path** (startup and every later (re)launch from the 60s loop): on Windows the plugin bypasses npx/cmd, resolves the **newest** `dist/cli.mjs` in the npm/npx cache or a global install on `PATH`, and spawns `node` directly on it. agentmemory 0.9.31+ Worker Compose may create cmd.exe/conhost inside its own worker tree; native Windows startup is currently affected by [agentmemory#1618](https://github.com/rohitg00/agentmemory/issues/1618). Relaunches are throttled by a 450s boot budget plus a cross-instance launch lock (multiple OpenCode servers share one backend). The exponential retry backoff keeps its 90s base, producing 450s → 450s → 450s → 720s … up to 12min
+   - **Always silent on the launcher's own spawn path** (startup and every later (re)launch from the 60s loop): on Windows the plugin resolves the **newest** `dist/cli.mjs` in the npm/npx cache or a global install on `PATH`, then executes it with the OpenCode host's own `process.execPath`. This avoids a `node` PATH lookup, shim hops, and an unnecessary npx/cmd fallback. agentmemory 0.9.31/0.9.32 can still open empty consoles inside iii 0.25.0's worker tree; that separate upstream limitation is described under **Compatibility**. Relaunches are throttled by a 450s boot budget plus a cross-instance launch lock (multiple OpenCode servers share one backend). The exponential retry backoff keeps its 90s base, producing 450s → 450s → 450s → 720s … up to 12min
 4. **Debug mode**: Set `OPENCODE_AGENTMEMORY_DEBUG=1` for verbose logging
 5. **Failure diagnostics**: A backend launch that exits with a non-zero code is logged at `warn` with the likely causes — a daemon already answering on the port, an enforced iii-engine pin mismatch, or a 0.9.31+ Worker Compose readiness failure. The backend runs with `stdio: "ignore"`, so for the actual error text run `npx @agentmemory/agentmemory doctor`
 
@@ -96,8 +98,11 @@ Restart OpenCode to relaunch agentmemory with the updated version.
 
 ## Troubleshooting
 
+**The backend starts, but empty console windows appear on Windows.**
+This is a known agentmemory 0.9.31/0.9.32 + iii 0.25.0 Worker Compose issue, not a launcher window. See [iii#2430](https://github.com/iii-hq/iii/issues/2430). Upgrade only when agentmemory pins a stable iii release containing [iii#2437](https://github.com/iii-hq/iii/pull/2437); forcing the alpha override is not a supported launcher configuration.
+
 **The backend never comes up and the log shows a non-zero launch exit.**
-Common causes are an enforced iii-engine pin mismatch, a stale instance still owning the port, or a 0.9.31+ Worker Compose worker failing to become ready. On native Windows, check [agentmemory#1618](https://github.com/rohitg00/agentmemory/issues/1618) for the known 0.9.31 startup issue. Run the doctor manually to see the actual error:
+Common causes are an enforced iii-engine pin mismatch, a stale instance still owning the port, or a 0.9.31+ Worker Compose worker failing to become ready. Run the doctor manually to see the actual error:
 
 ```bash
 npx @agentmemory/agentmemory doctor
@@ -122,7 +127,7 @@ npx clear-npx-cache
 
 ## API
 
-The plugin targets the OpenCode V2 plugin API (`@opencode/plugin` >= 2.0.18). Supervision starts in `setup()` when the plugin loads, and the returned cleanup function stops the health-check loop on unload.
+The plugin targets the OpenCode V2 plugin API (`@opencode/plugin` >= 2.2.5). Supervision starts in `setup()` when the plugin loads, and the returned cleanup function stops the health-check loop on unload.
 
 ```typescript
 import type { Plugin } from "@opencode/plugin";
