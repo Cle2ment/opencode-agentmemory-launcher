@@ -16,7 +16,7 @@ Dependency direction is strictly `agentmemory-launcher.ts → launch.ts → cli-
 
 Flow: on plugin load (`setup()`) → `GET /agentmemory/livez` (2s timeout, one 3s confirmation retry) → resolve and silently spawn the newest CLI if down → 60s supervision loop → cleanup stops the loop on unload.
 
-Windows launch path (the launcher's own spawn is always silent): every launch bypasses npx/cmd and spawns `node` directly on `dist/cli.mjs` resolved from the **newest** agentmemory it can find. Candidates come from the npm/npx cache (`npm_config_cache` → `~/.npmrc` `cache=` → `%LOCALAPPDATA%/npm-cache`, plus portable cache probes beside PATH entries) and global installs on `PATH`. Both literal PATH entries and their `realpath` values are scanned, which is required for Scoop's `apps/nodejs/current/bin` → `persist/nodejs/bin` layout. Highest version wins. Fall back to the legacy npx spawn only when no candidate is found or the direct spawn errors. Plain `windowsHide` is insufficient for the npx path because every cmd.exe hop can allocate a new console.
+Windows launch path (the launcher's own spawn is always silent): the direct path bypasses npx/cmd and spawns the OpenCode host's `process.execPath` on `dist/cli.mjs` resolved from the **newest** agentmemory it can find. Using the absolute host executable avoids PATH lookup failures and node shims. Candidates come from the npm/npx cache (`npm_config_cache` → `~/.npmrc` `cache=` → `%LOCALAPPDATA%/npm-cache`, plus portable cache probes beside PATH entries) and global installs on `PATH`. Both literal PATH entries and their `realpath` values are scanned, which is required for Scoop's `apps/nodejs/current/bin` → `persist/nodejs/bin` layout. Highest version wins. Fall back to the legacy npx spawn only when no candidate is found or the direct spawn errors. Plain `windowsHide` is insufficient for the npx path because every cmd.exe hop can allocate a new console.
 
 Relaunches use a 450s boot budget plus a cross-instance self-expiring lock (`%TEMP%/agentmemory-launcher.lock`). The retry delay is `max(450s, 90s·2^attempts capped at 12min)`, so normal 0.9.31 startup is not interrupted by a duplicate launch. agentmemory 0.9.31+ Worker Compose may create cmd.exe/conhost inside its own worker tree; do not attribute every console flash to the launcher without a parent-process trace.
 
@@ -52,22 +52,23 @@ Legacy 0.9.30 used the older CLI + engine + worker model with a 15s worker readi
 
 - **StateKV timeout**: after 12-24h uptime, `state::set` may timeout → `/health` returns 503. `/livez` is unaffected.
 - **npx cache vs global install**: these are separate copies. The launcher resolves the newest across both, including globals reachable only through a symlinked PATH entry's `realpath`; clear stale caches with `npx clear-npx-cache` when needed.
-- **Engine version pin**: 0.9.30 pins iii-engine 0.22.1; 0.9.31 pins 0.25.0 and enforces the pin. Native Windows requires manually installing the pinned `iii.exe`; the CLI manages engine selection, not this launcher. Legacy custom iii configs and `AGENTMEMORY_USE_DOCKER` do not apply to 0.9.31 Worker Compose.
+- **Engine version pin**: 0.9.30 pins iii-engine 0.22.1; 0.9.31/0.9.32 pin 0.25.0 and enforce the pin. Since 0.9.32 the CLI can automatically install the pinned Windows engine and skips interactive setup prompts on Windows/non-TTY. The CLI manages engine selection, not this launcher. Legacy custom iii configs and `AGENTMEMORY_USE_DOCKER` do not apply to Worker Compose.
 - **Auth on by default (0.9.30+)**: the daemon generates `~/.agentmemory/secret` (mode 0600) when `AGENTMEMORY_SECRET` is unset. Bundled clients read it automatically; hand-written REST calls need `Authorization: Bearer $(cat ~/.agentmemory/secret)`. The launcher only calls public `/livez`.
 - **Silent launch failure**: backend stdio is ignored. Any non-zero CLI exit logs a `warn` covering port contention, engine-pin mismatch, and 0.9.31+ Worker Compose readiness failure; use `agentmemory doctor` for details.
 - **Native Windows 0.9.31 startup regression**: [agentmemory#1618](https://github.com/rohitg00/agentmemory/issues/1618) documents Worker Compose shell quoting and environment/PATH problems that prevent workers from registering. Native Windows is unverified upstream. Do not hide this by patching third-party `dist` files in this repository.
 - **Windows focus-stealing tabs**: cmd.exe hops in npx/OpenCode local-MCP spawn chains can allocate consoles. The launcher has no deliberate visible-startup mode. For 0.9.31+, distinguish the launcher's silent direct spawn from consoles created inside Worker Compose or by OpenCode MCP spawns using process-parent evidence.
+- **0.9.31/0.9.32 empty console windows**: both pin iii 0.25.0, which opens an empty console for the engine and each worker when compose has no console ([iii#2430](https://github.com/iii-hq/iii/issues/2430)). [iii#2437](https://github.com/iii-hq/iii/pull/2437) fixes it, but stable iii 0.25.0 does not contain the fix. Do not claim the launcher can suppress these grandchildren with `windowsHide`, force the alpha engine, or patch third-party files.
 - **winnat port theft (os error 10013)**: check `netsh interface ipv4 show excludedportrange protocol=tcp`. Durable fix (admin): `net stop winnat` → `netsh int ipv4 add excludedportrange protocol=tcp startport=3111 numberofports=3` → `net start winnat`.
 - **Legacy 0.9.30 stale worker (`worker did not become ready within 15s`)**: restart the whole chain with `agentmemory stop` or stop the engine+worker pair together. Never kill a single worker in isolation; its engine may have bound routes to that process, causing `/livez` to return 404 while the port remains held.
 
 ## OpenCode V2 Plugin API
 
-SDK: `@opencode/plugin` (stable, >=2.0.18). Types are imported type-only (`import type { Plugin } from "@opencode/plugin"`), so the SDK is a **devDependency** with zero runtime footprint; the V2 host decodes the shape at runtime.
+SDK: `@opencode/plugin` (stable, >=2.2.5). Types are imported type-only (`import type { Plugin } from "@opencode/plugin"`), so the SDK is a **devDependency** with zero runtime footprint; the V2 host decodes the shape at runtime.
 
 | Aspect | V2 behavior |
 |---|---|
 | Module shape | default export `{ id: string, setup(ctx): Cleanup \| void }` (`id` required; extra keys stripped) |
-| Entrypoint resolution | bare package name → `exports["."]`; Node path uses `require.resolve` → **`exports["."]` must carry a `default` condition**, not only `import` |
+| Entrypoint resolution | bare package name → `exports["."]`; current V2 resolves through ESM (`import.meta.resolve` / `Bun.resolveSync`). Keep the existing `default` condition for compatibility, but it is not required by the current loader |
 | Config key | `"plugins": [...]` (plural), `Array<string \| { package, options }>` |
 | Cleanup | function returned from `setup()`, called on plugin unload (e.g. config hot-reload) |
 | Logging | **no `client.app.log` in V2** → stderr: warn/error always, info/debug only with `OPENCODE_AGENTMEMORY_DEBUG=1` |
